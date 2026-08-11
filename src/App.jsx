@@ -79,8 +79,10 @@ export default function App() {
       sceneDepth:
         typeof window !== 'undefined' && window.innerWidth < 640 ? SCENE_DEPTH_MOBILE : SCENE_DEPTH,
       perspectiveOriginMobile: PERSPECTIVE_ORIGIN_MOBILE,
-      padding: typeof window !== 'undefined' && window.innerWidth < 640 ? MOBILE_CAMERA_PADDING : 0.72,
-      scaleMultiplier: typeof window !== 'undefined' && window.innerWidth < 640 ? MOBILE_CAMERA_SCALE : 1,
+      padding:
+        typeof window !== 'undefined' && window.innerWidth < 640 ? MOBILE_CAMERA_PADDING : 0.72,
+      scaleMultiplier:
+        typeof window !== 'undefined' && window.innerWidth < 640 ? MOBILE_CAMERA_SCALE : 1,
       viewOffsetY:
         typeof window !== 'undefined' && window.innerWidth < 640 ? MOBILE_CAMERA_VIEW_OFFSET_Y : 0,
       mobileFooter: MOBILE_FOOTER_RESERVE,
@@ -124,12 +126,12 @@ export default function App() {
   const camera = useMemo(() => {
     const mobileFooter = cameraDebugOpen ? cameraDebug.mobileFooter : MOBILE_FOOTER_RESERVE
     const camVh = compact ? Math.max(vh - mobileFooter, vh * 0.82) : vh
-    const padding = cameraDebugOpen
-      ? cameraDebug.padding
+    const padding = cameraDebugOpen ? cameraDebug.padding : compact ? MOBILE_CAMERA_PADDING : 0.72
+    const scaleMultiplier = cameraDebugOpen
+      ? cameraDebug.scaleMultiplier
       : compact
-        ? MOBILE_CAMERA_PADDING
-        : 0.72
-    const scaleMultiplier = cameraDebugOpen ? cameraDebug.scaleMultiplier : compact ? MOBILE_CAMERA_SCALE : 1
+        ? MOBILE_CAMERA_SCALE
+        : 1
     const viewOffsetY = cameraDebugOpen
       ? cameraDebug.viewOffsetY
       : compact
@@ -162,18 +164,7 @@ export default function App() {
       scaleMultiplier: cameraDebugOpen ? scaleMultiplier : 1,
       viewOffsetY: cameraDebugOpen ? viewOffsetY : 0,
     })
-  }, [
-    focus,
-    phase,
-    vw,
-    vh,
-    scene,
-    sceneTilt,
-    sceneSpin,
-    compact,
-    cameraDebugOpen,
-    cameraDebug,
-  ])
+  }, [focus, phase, vw, vh, scene, sceneTilt, sceneSpin, compact, cameraDebugOpen, cameraDebug])
 
   const spring = useMemo(() => {
     if (cameraDebugOpen) return { stiffness: 800, damping: 50 }
@@ -248,7 +239,13 @@ export default function App() {
           return !open
         })
       }
-      if ((e.key === 'h' || e.key === 'H') && phase === 'board' && cameraDebugOpen && !e.metaKey && !e.ctrlKey) {
+      if (
+        (e.key === 'h' || e.key === 'H') &&
+        phase === 'board' &&
+        cameraDebugOpen &&
+        !e.metaKey &&
+        !e.ctrlKey
+      ) {
         setCameraDebugPanelVisible((visible) => !visible)
       }
     }
@@ -335,70 +332,78 @@ export default function App() {
               onHover={setHoveredId}
             />
           ))}
-          <BoardCredit visible={onBoard || phase === 'returning'} layout={scene} compact={compact} />
+          <BoardCredit
+            visible={onBoard || phase === 'returning'}
+            layout={scene}
+            compact={compact}
+          />
         </motion.div>
       </div>
 
       <motion.footer
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-8 sm:p-10"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:gap-2 sm:p-10"
         animate={{ opacity: showFooter ? 1 : 0, y: showFooter ? 0 : 12 }}
         transition={{ duration: 0.35, ease: 'easeOut' }}
       >
-        <div className="h-6">
-              <AnimatePresence mode="wait">
-                {hovered ? (
-                  <motion.div
-                    key={hovered.id}
-                    className="flex items-baseline gap-3"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <span className="text-base font-medium" style={{ color: hovered.color }}>
-                      {hovered.label}
-                    </span>
-                    <span className="text-base text-ink/50 sm:text-sm">{hovered.kicker}</span>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="idle-hint"
-                    className="text-xs uppercase tracking-[0.22em] text-ink/35 sm:text-[11px] sm:tracking-[0.3em]"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    Pick a piece — or explore the margin sheets
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-        <div className={`flex flex-wrap items-center justify-center gap-3${showFooter ? ' pointer-events-auto' : ' pointer-events-none'}`}>
-              <a
-                href={RESUME_URL}
-                download
-                className="text-xs uppercase tracking-[0.14em] text-ink/45 underline-offset-4 transition-colors hover:text-ink/75 hover:underline sm:text-[11px] sm:tracking-[0.16em]"
+        <div className="hidden h-6 sm:block">
+          <AnimatePresence mode="wait">
+            {hovered ? (
+              <motion.div
+                key={hovered.id}
+                className="flex items-baseline gap-3"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
               >
-                Résumé ↓
-              </a>
-              <span className="text-ink/20">·</span>
-              {[
-                { id: 'now', label: 'Now' },
-                { id: 'notes', label: 'Notes' },
-                { id: 'blog', label: 'Blog' },
-                { id: 'colophon', label: 'A-1' },
-                { id: 'legend', label: '?' },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => select(item.id)}
-                  className="rounded-lg border border-ink/15 bg-card px-3.5 py-2 text-xs uppercase tracking-[0.14em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.16em]"
-                >
-                  {item.label}
-                </button>
-              ))}
+                <span className="text-base font-medium" style={{ color: hovered.color }}>
+                  {hovered.label}
+                </span>
+                <span className="text-base text-ink/50 sm:text-sm">{hovered.kicker}</span>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="idle-hint"
+                className="text-xs uppercase tracking-[0.22em] text-ink/35 sm:text-[11px] sm:tracking-[0.3em]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+              >
+                Pick a piece — or explore the margin sheets
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <div
+          className={`flex flex-wrap items-center justify-center gap-3${showFooter ? ' pointer-events-auto' : ' pointer-events-none'}`}
+        >
+          <a
+            href={RESUME_URL}
+            download
+            className="text-xs uppercase tracking-[0.14em] text-ink/45 underline-offset-4 transition-colors hover:text-ink/75 hover:underline sm:text-[11px] sm:tracking-[0.16em]"
+          >
+            Résumé ↓
+          </a>
+          <div className="hidden sm:contents">
+            <span className="text-ink/20">·</span>
+            {[
+              { id: 'now', label: 'Now' },
+              { id: 'notes', label: 'Notes' },
+              { id: 'blog', label: 'Blog' },
+              { id: 'colophon', label: 'A-1' },
+              { id: 'legend', label: '?' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => select(item.id)}
+                className="rounded-lg border border-ink/15 bg-card px-3.5 py-2 text-xs uppercase tracking-[0.14em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.16em]"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </motion.footer>
 

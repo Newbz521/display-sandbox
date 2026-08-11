@@ -136,7 +136,9 @@ function Cards({ content, color, compact = false }) {
             >
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-xs" style={{ background: color }} />
-                <h3 className="text-lg font-medium text-ink sm:text-base">{item.name ?? item.title}</h3>
+                <h3 className="text-lg font-medium text-ink sm:text-base">
+                  {item.name ?? item.title}
+                </h3>
                 {linked ? (
                   <span className="ml-auto text-ink/35 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-ink/70">
                     →
@@ -193,9 +195,22 @@ function excerpt(text, max = 160) {
   return `${first.slice(0, max).trim()}…`
 }
 
+function parsePostDate(dateStr) {
+  const [month, day, year] = (dateStr ?? '').split('/').map(Number)
+  if (!month || !day || !year) return 0
+  return new Date(year, month - 1, day).getTime()
+}
+
+function postsNewestFirst(items) {
+  return [...items].sort((a, b) => parsePostDate(b.date) - parsePostDate(a.date))
+}
+
 function articleParagraphs(item) {
   const raw = item.body ?? item.blurb ?? ''
-  return raw.split(/\n\n+/).map((p) => p.trim()).filter(Boolean)
+  return raw
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
 }
 
 function ArticleView({ item, color, onBack }) {
@@ -221,20 +236,24 @@ function ArticleView({ item, color, onBack }) {
 
       <Section i={0}>
         <div className={`${label} tracking-[0.28em]`}>{item.date}</div>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{item.title}</h2>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+          {item.title}
+        </h2>
         <div
           className="mt-8 h-px w-full"
           style={{ background: `linear-gradient(90deg, ${color}88, transparent)` }}
         />
       </Section>
 
-      {paragraphs.map((p, i) => (
-        <Section key={i} i={i + 1}>
-          <p className="max-w-2xl text-[1.0625rem] leading-[1.7] text-ink/80 sm:text-lg sm:leading-relaxed">
-            {p}
-          </p>
-        </Section>
-      ))}
+      <div className="space-y-4">
+        {paragraphs.map((p, i) => (
+          <Section key={i} i={i + 1}>
+            <p className="max-w-2xl text-[1.0625rem] leading-[1.7] text-ink/80 sm:text-lg sm:leading-relaxed">
+              {p}
+            </p>
+          </Section>
+        ))}
+      </div>
     </div>
   )
 }
@@ -246,11 +265,13 @@ function List({ content, color, compact = false }) {
     return <ArticleView item={article} color={color} onBack={() => setArticle(null)} />
   }
 
-  const titleClass = 'text-xl font-medium text-ink/90 transition-colors group-hover:text-ink sm:text-lg'
+  const titleClass =
+    'text-xl font-medium text-ink/90 transition-colors group-hover:text-ink sm:text-lg'
+  const items = postsNewestFirst(content.items)
 
   return (
     <div className="divide-y divide-ink/10">
-      {content.items.map((item, i) => {
+      {items.map((item, i) => {
         const readable = !item.link || item.link === '#'
         const preview = excerpt(item.blurb)
 
@@ -331,7 +352,9 @@ function Contact({ content, color, compact = false }) {
   return (
     <div className={compact ? 'space-y-5' : 'space-y-8'}>
       <Section i={0}>
-        <p className={`max-w-2xl text-ink/85 ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} leading-relaxed`}>
+        <p
+          className={`max-w-2xl text-ink/85 ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'} leading-relaxed`}
+        >
           {content.lead}
         </p>
       </Section>
@@ -344,7 +367,9 @@ function Contact({ content, color, compact = false }) {
               {...(/^https?:/i.test(item.link) ? { target: '_blank', rel: 'noreferrer' } : {})}
               className="group flex items-center gap-4 rounded-xl border border-ink/12 px-5 py-4 transition-colors hover:border-ink/25 hover:bg-card"
             >
-              <span className="text-sm uppercase tracking-[0.18em] text-ink/45 sm:text-xs">{item.label}</span>
+              <span className="text-sm uppercase tracking-[0.18em] text-ink/45 sm:text-xs">
+                {item.label}
+              </span>
               <span className="ml-auto text-base text-ink/85 sm:text-sm" style={{ color }}>
                 {item.value}
               </span>
@@ -373,7 +398,9 @@ export function PieceContent({ piece, compact = false, dense = false }) {
   const extra =
     piece.content.kind === 'groups'
       ? { dense }
-      : piece.content.kind === 'contact' || piece.content.kind === 'list' || piece.content.kind === 'cards'
+      : piece.content.kind === 'contact' ||
+          piece.content.kind === 'list' ||
+          piece.content.kind === 'cards'
         ? { compact }
         : {}
 

@@ -5,7 +5,8 @@ import { scatterTransition } from '../lib/pieceTiers'
 
 function MarginZone({ zone, phase, isSelected, isHovered, onSelect, onHover }) {
   const idle = phase === 'board'
-  const scattered = (phase === 'zooming' || phase === 'detail' || phase === 'exiting') && !isSelected
+  const scattered =
+    (phase === 'zooming' || phase === 'detail' || phase === 'exiting') && !isSelected
   const returning = phase === 'returning'
   const inMotion = scattered || returning
   const lit = isHovered || isSelected

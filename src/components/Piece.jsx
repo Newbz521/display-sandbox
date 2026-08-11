@@ -138,10 +138,20 @@ function Shadow({ block, lifted, delay }) {
  * A piece: its blocks move as one, float on their own loop, and lift toward the
  * viewer on hover. On selection every other piece is flung clear of the frame.
  */
-function Piece({ piece, phase, isSelected, isHovered, onSelect, onHover, reduceMotion, allowFloat = true }) {
+function Piece({
+  piece,
+  phase,
+  isSelected,
+  isHovered,
+  onSelect,
+  onHover,
+  reduceMotion,
+  allowFloat = true,
+}) {
   const idle = phase === 'board'
   const floating = phase === 'board' && allowFloat
-  const scattered = (phase === 'zooming' || phase === 'detail' || phase === 'exiting') && !isSelected
+  const scattered =
+    (phase === 'zooming' || phase === 'detail' || phase === 'exiting') && !isSelected
   const returning = phase === 'returning'
   const settling = phase === 'board' && !allowFloat
   const inMotion = scattered || returning || settling
@@ -209,9 +219,7 @@ function Piece({ piece, phase, isSelected, isHovered, onSelect, onHover, reduceM
       <motion.div
         className="h-full w-full"
         style={{ transformStyle: 'preserve-3d' }}
-        animate={
-          floating && !reduceMotion ? { z: [0, 16, 0, -10, 0] } : { z: 0 }
-        }
+        animate={floating && !reduceMotion ? { z: [0, 16, 0, -10, 0] } : { z: 0 }}
         transition={
           floating && !reduceMotion
             ? {

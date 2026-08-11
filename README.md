@@ -48,12 +48,12 @@ Paper-craft, not screen-dark: everything sits on warm off-white, and the only
 the tokens live in [styles.css](src/styles.css) as `paper`, `paper-2`, `card`,
 and `ink`.
 
-| piece      | colour              | piece   | colour            |
-| ---------- | ------------------- | ------- | ----------------- |
-| Work       | `#ece5d7` stone     | Blog    | `#a99be0` lavender |
-| Projects   | `#e8785c` coral     | Play    | `#d9b98c` kraft    |
-| Toolkit    | `#7fbfa6` mint      | Contact | `#49a08f` teal     |
-| About      | `#7f97c9` slate     | slab    | `#16224a` navy     |
+| piece    | colour          | piece   | colour             |
+| -------- | --------------- | ------- | ------------------ |
+| Work     | `#ece5d7` stone | Blog    | `#a99be0` lavender |
+| Projects | `#e8785c` coral | Play    | `#d9b98c` kraft    |
+| Toolkit  | `#7fbfa6` mint  | Contact | `#49a08f` teal     |
+| About    | `#7f97c9` slate | slab    | `#16224a` navy     |
 
 The colours are assigned so no two touching pieces share a hue family. Navy is
 reserved for the slab so every piece reads against it, which is why Work is stone
@@ -114,11 +114,11 @@ Framer Motion's property order, because that maths depends on the exact sequence
 
 The three phases:
 
-| phase     | camera                    | pieces                                  |
-| --------- | ------------------------- | --------------------------------------- |
+| phase     | camera                    | pieces                                     |
+| --------- | ------------------------- | ------------------------------------------ |
 | `board`   | frames the whole square   | float on individual loops, ripple on hover |
-| `zooming` | flies to the chosen piece | the other six fly clear of the frame     |
-| `detail`  | eases back a little       | chosen piece sits behind the copy        |
+| `zooming` | flies to the chosen piece | the other six fly clear of the frame       |
+| `detail`  | eases back a little       | chosen piece sits behind the copy          |
 
 ## Hover
 
@@ -156,10 +156,10 @@ Playground and the company links on **Work** come from the previous portfolio
 (`~/Personal/NewPortfolio/rotrk`, deployed at lawnyc.netlify.app). Every external
 link was checked live; two had rotted and were repointed:
 
-| link                          | was  | now                                     |
-| ----------------------------- | ---- | --------------------------------------- |
-| `ezml.io`                     | 404  | `www.ezml.io`                           |
-| `beacon-defender.vercel.app`  | 404  | `newbz521.github.io/Beacon-Defender-/`  |
+| link                         | was | now                                    |
+| ---------------------------- | --- | -------------------------------------- |
+| `ezml.io`                    | 404 | `www.ezml.io`                          |
+| `beacon-defender.vercel.app` | 404 | `newbz521.github.io/Beacon-Defender-/` |
 
 **Blog** is still placeholder copy — nothing in the résumé or the old portfolio
 fills it. Replace it, or drop the piece and re-cut the square.
@@ -198,4 +198,5 @@ derived from them (keep the pieces non-overlapping, and keep each one connected)
 - Keyboard: pieces are focusable, Enter/Space opens one, Escape goes back.
 - `prefers-reduced-motion` disables the float loop and shortens the camera move.
 - The content is placeholder copy — replace it with your own.
+
 # display-sandbox

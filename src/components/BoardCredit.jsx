@@ -31,7 +31,9 @@ export default function BoardCredit({ visible, layout, compact = false }) {
         <div className="mt-2 text-4xl font-bold tracking-tight text-ink sm:mt-2 sm:text-4xl">
           {OWNER.name}
         </div>
-        <div className="mt-1.5 text-xl font-semibold text-ink/82 sm:mt-1.5 sm:text-xl">{OWNER.role}</div>
+        <div className="mt-1.5 text-xl font-semibold text-ink/82 sm:mt-1.5 sm:text-xl">
+          {OWNER.role}
+        </div>
         {!compact ? (
           <div className="mt-3 text-lg leading-relaxed text-ink/68">{OWNER.tagline}</div>
         ) : null}

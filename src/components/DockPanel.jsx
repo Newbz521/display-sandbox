@@ -37,7 +37,9 @@ function DockLink({ item, color }) {
           </span>
         ) : null}
       </div>
-      <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-ink/60 sm:text-xs">{item.blurb}</p>
+      <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-ink/60 sm:text-xs">
+        {item.blurb}
+      </p>
     </Wrapper>
   )
 }
@@ -70,7 +72,10 @@ export default function DockPanel({ piece, onBack, exiting = false }) {
         <div className="mb-4 flex flex-wrap items-center gap-4 border-b border-ink/8 pb-4">
           <BackButton color={piece.color} onBack={onBack} compact />
           <div className="ml-auto text-right">
-            <div className="text-xs uppercase tracking-[0.22em] sm:text-[11px]" style={{ color: piece.color }}>
+            <div
+              className="text-xs uppercase tracking-[0.22em] sm:text-[11px]"
+              style={{ color: piece.color }}
+            >
               {piece.kicker}
             </div>
             <div className="text-lg font-medium text-ink">{piece.label}</div>

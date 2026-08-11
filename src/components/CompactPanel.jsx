@@ -5,7 +5,7 @@ import { PieceContent } from './detail/Content'
 export default function CompactPanel({ piece, onBack, exiting = false }) {
   return (
     <motion.div
-      className={`absolute inset-0 z-30 flex items-end justify-center p-4 sm:items-center sm:p-8${exiting ? ' pointer-events-none' : ''}`}
+      className={`absolute inset-0 z-30 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8${exiting ? ' pointer-events-none' : ''}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: exiting ? 0 : 1 }}
       exit={{ opacity: 0, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] } }}
@@ -30,12 +30,19 @@ export default function CompactPanel({ piece, onBack, exiting = false }) {
         </div>
 
         <div className="overflow-y-auto px-5 py-6 sm:px-6">
-          <div className="text-sm uppercase tracking-[0.24em] sm:text-xs" style={{ color: piece.color }}>
+          <div
+            className="text-sm uppercase tracking-[0.24em] sm:text-xs"
+            style={{ color: piece.color }}
+          >
             {piece.kicker}
           </div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{piece.label}</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            {piece.label}
+          </h2>
           {piece.content.kind === 'contact' ? (
-            <p className="mt-4 text-base leading-relaxed text-ink/65 sm:text-sm">{piece.content.lead}</p>
+            <p className="mt-4 text-base leading-relaxed text-ink/65 sm:text-sm">
+              {piece.content.lead}
+            </p>
           ) : null}
           <div
             className="mt-5 mb-6 h-px w-full"

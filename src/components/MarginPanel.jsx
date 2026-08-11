@@ -13,7 +13,9 @@ function Now({ content, color }) {
       <div className="space-y-4">
         {content.items.map((item) => (
           <div key={item.label}>
-            <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">{item.label}</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">
+              {item.label}
+            </div>
             <p className="mt-1 text-base leading-relaxed text-ink/75 sm:text-sm">{item.value}</p>
           </div>
         ))}
@@ -72,22 +74,31 @@ function Detail({ content, color }) {
         </a>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">Problem</div>
+        <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">
+          Problem
+        </div>
         <p className="mt-2 text-base leading-relaxed text-ink/72 sm:text-sm">{content.problem}</p>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">Approach</div>
+        <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">
+          Approach
+        </div>
         <ul className="mt-2 space-y-2">
           {content.approach.map((line) => (
             <li key={line} className="flex gap-2 text-base leading-relaxed text-ink/70 sm:text-sm">
-              <span className="mt-2 h-0.75 w-0.75 shrink-0 rounded-full" style={{ background: color }} />
+              <span
+                className="mt-2 h-0.75 w-0.75 shrink-0 rounded-full"
+                style={{ background: color }}
+              />
               {line}
             </li>
           ))}
         </ul>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">Outcomes</div>
+        <div className="text-xs uppercase tracking-[0.18em] text-ink/45 sm:text-[11px]">
+          Outcomes
+        </div>
         <ul className="mt-2 space-y-2">
           {content.outcomes.map((line) => (
             <li key={line} className="flex gap-2 text-base leading-relaxed text-ink/70 sm:text-sm">
@@ -99,7 +110,10 @@ function Detail({ content, color }) {
       </div>
       <div className="flex flex-wrap gap-1.5 pt-1">
         {content.tags.map((t) => (
-          <span key={t} className="rounded-full border border-ink/12 px-2.5 py-1 text-xs text-ink/55 sm:text-[11px]">
+          <span
+            key={t}
+            className="rounded-full border border-ink/12 px-2.5 py-1 text-xs text-ink/55 sm:text-[11px]"
+          >
             {t}
           </span>
         ))}
@@ -165,7 +179,7 @@ export default function MarginPanel({ zone, onBack, exiting = false }) {
 
   return (
     <motion.div
-      className={`absolute inset-0 z-30 flex items-end justify-center p-4 sm:items-center sm:p-8${exiting ? ' pointer-events-none' : ''}`}
+      className={`absolute inset-0 z-30 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8${exiting ? ' pointer-events-none' : ''}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: exiting ? 0 : 1 }}
       exit={{ opacity: 0, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] } }}
@@ -190,10 +204,15 @@ export default function MarginPanel({ zone, onBack, exiting = false }) {
         </div>
 
         <div className="overflow-y-auto px-5 py-6 sm:px-6">
-          <div className="text-sm uppercase tracking-[0.24em] sm:text-xs" style={{ color: zone.color }}>
+          <div
+            className="text-sm uppercase tracking-[0.24em] sm:text-xs"
+            style={{ color: zone.color }}
+          >
             {zone.kicker}
           </div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{zone.label}</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            {zone.label}
+          </h2>
           <div
             className="mt-5 mb-6 h-px w-full"
             style={{ background: `linear-gradient(90deg, ${zone.color}66, transparent)` }}

@@ -20,7 +20,10 @@ export default function DetailPanel({ piece, onBack, exiting = false }) {
 
         <div className="py-12 sm:py-14">
           <motion.div variants={rise} initial="hidden" animate="show">
-            <div className="text-sm uppercase tracking-[0.28em] sm:text-xs" style={{ color: piece.color }}>
+            <div
+              className="text-sm uppercase tracking-[0.28em] sm:text-xs"
+              style={{ color: piece.color }}
+            >
               {piece.kicker}
             </div>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-ink sm:text-7xl">

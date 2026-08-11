@@ -139,8 +139,22 @@ export default function CameraDebug({
       </div>
 
       <div className="space-y-3">
-        <Slider label="rotateX (tilt)" value={values.tiltX} min={0} max={60} step={0.5} onChange={(v) => set('tiltX', v)} />
-        <Slider label="rotateZ (spin)" value={values.spinZ} min={-30} max={30} step={0.5} onChange={(v) => set('spinZ', v)} />
+        <Slider
+          label="rotateX (tilt)"
+          value={values.tiltX}
+          min={0}
+          max={60}
+          step={0.5}
+          onChange={(v) => set('tiltX', v)}
+        />
+        <Slider
+          label="rotateZ (spin)"
+          value={values.spinZ}
+          min={-30}
+          max={30}
+          step={0.5}
+          onChange={(v) => set('spinZ', v)}
+        />
         <Slider
           label="perspective (px)"
           value={values.sceneDepth}
@@ -165,7 +179,14 @@ export default function CameraDebug({
           step={1}
           onChange={(v) => set('perspectiveY', v)}
         />
-        <Slider label="padding (zoom fill)" value={values.padding} min={0.4} max={1} step={0.01} onChange={(v) => set('padding', v)} />
+        <Slider
+          label="padding (zoom fill)"
+          value={values.padding}
+          min={0.4}
+          max={1}
+          step={0.01}
+          onChange={(v) => set('padding', v)}
+        />
         <Slider
           label="scale multiplier"
           value={values.scaleMultiplier}
@@ -214,7 +235,9 @@ function Slider({ label, value, min, max, step, onChange }) {
     <label className="block">
       <div className="mb-1 flex justify-between text-[10px] text-ink/55">
         <span>{label}</span>
-        <span className="font-mono text-ink/70">{typeof value === 'number' ? value.toFixed(step < 1 ? 2 : 0) : value}</span>
+        <span className="font-mono text-ink/70">
+          {typeof value === 'number' ? value.toFixed(step < 1 ? 2 : 0) : value}
+        </span>
       </div>
       <input
         type="range"
