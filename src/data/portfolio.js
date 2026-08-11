@@ -279,6 +279,7 @@ export const PIECES = [{
         content: {
             kind: 'list',
             items: [{
+                    slug: 'mcp-design',
                     title: 'Thoughts on the future of MCP design',
                     date: '05/21/2026',
                     blurb: `In the age of AI, I think a lot of MCP design is already heading in the wrong direction.
@@ -304,6 +305,7 @@ The goal should be to build the system around it so it doesn't have to.
                     link: '#',
                 },
                 {
+                    slug: 'architecture-and-ai',
                     title: 'Architecture and AI',
                     date: '08/10/2026',
                     blurb: `I think AI has the potential to push architecture back toward what architects are actually supposed to do: design.
@@ -326,6 +328,7 @@ Maybe the biggest opportunity for AI isn't replacing architects at all. Maybe it
                     link: '#',
                 },
                 {
+                    slug: 'slowing-down',
                     title: 'Slowing down',
                     date: '08/11/2026',
                     blurb: `I was doing a little shopping in SoHo with my wife. She went into the fitting room, so naturally I found one of those couches sitting between the clothing aisles and took a seat.

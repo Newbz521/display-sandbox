@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { blogArticlePath, findPostBySlug, postSlug } from '../../lib/blogRoutes'
 
 export const rise = {
   hidden: { opacity: 0, y: 24 },
@@ -215,13 +216,33 @@ function articleParagraphs(item) {
 
 function ArticleView({ item, color, onBack }) {
   const paragraphs = articleParagraphs(item)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  const share = async () => {
+    const slug = postSlug(item)
+    if (!slug || typeof window === 'undefined') return
+    const url = `${window.location.origin}${blogArticlePath(slug)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      // Fallback for older browsers / denied clipboard permission.
+      window.prompt('Copy link', url)
+    }
+  }
 
   return (
     <div className="space-y-8">
       <motion.button
         type="button"
         onClick={onBack}
-        className="group inline-flex items-center gap-2.5 text-base text-ink/55 transition-colors hover:text-ink sm:text-sm"
+        className="group inline-flex cursor-pointer items-center gap-2.5 text-base text-ink/55 transition-colors hover:text-ink sm:text-sm"
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
       >
@@ -236,9 +257,24 @@ function ArticleView({ item, color, onBack }) {
 
       <Section i={0}>
         <div className={`${label} tracking-[0.28em]`}>{item.date}</div>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-          {item.title}
-        </h2>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+            {item.title}
+          </h2>
+          <button
+            type="button"
+            onClick={share}
+            className={`shrink-0 cursor-pointer rounded-lg border px-3 py-1.5 text-xs uppercase tracking-[0.14em] transition-colors sm:text-[10px] sm:tracking-[0.16em] ${
+              copied
+                ? 'border-current bg-card'
+                : 'border-ink/15 bg-card text-ink/55 hover:border-ink/30 hover:text-ink'
+            }`}
+            style={copied ? { color, borderColor: `${color}66`, background: `${color}12` } : undefined}
+            aria-live="polite"
+          >
+            {copied ? 'Link Copied' : 'Share'}
+          </button>
+        </div>
         <div
           className="mt-8 h-px w-full"
           style={{ background: `linear-gradient(90deg, ${color}88, transparent)` }}
@@ -258,16 +294,31 @@ function ArticleView({ item, color, onBack }) {
   )
 }
 
-function List({ content, color, compact = false }) {
-  const [article, setArticle] = useState(null)
+function List({ content, color, compact = false, openSlug = null, onOpenSlug }) {
+  const items = postsNewestFirst(content.items)
+  const controlled = typeof onOpenSlug === 'function'
+  const [localArticle, setLocalArticle] = useState(null)
+
+  const article = controlled
+    ? findPostBySlug(content.items, openSlug)
+    : localArticle
+
+  const openArticle = (item) => {
+    if (controlled) onOpenSlug(postSlug(item))
+    else setLocalArticle(item)
+  }
+
+  const closeArticle = () => {
+    if (controlled) onOpenSlug(null)
+    else setLocalArticle(null)
+  }
 
   if (article) {
-    return <ArticleView item={article} color={color} onBack={() => setArticle(null)} />
+    return <ArticleView item={article} color={color} onBack={closeArticle} />
   }
 
   const titleClass =
     'text-xl font-medium text-ink/90 transition-colors group-hover:text-ink sm:text-lg'
-  const items = postsNewestFirst(content.items)
 
   return (
     <div className="divide-y divide-ink/10">
@@ -280,7 +331,7 @@ function List({ content, color, compact = false }) {
             <Section key={item.title} i={i}>
               <button
                 type="button"
-                onClick={() => setArticle(item)}
+                onClick={() => openArticle(item)}
                 className="group block w-full py-5 text-left sm:py-5"
               >
                 <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -391,18 +442,24 @@ export const RENDERERS = {
   contact: Contact,
 }
 
-export function PieceContent({ piece, compact = false, dense = false }) {
+export function PieceContent({
+  piece,
+  compact = false,
+  dense = false,
+  openSlug = null,
+  onOpenSlug,
+}) {
   const Body = RENDERERS[piece.content.kind]
   if (!Body) return null
 
   const extra =
     piece.content.kind === 'groups'
       ? { dense }
-      : piece.content.kind === 'contact' ||
-          piece.content.kind === 'list' ||
-          piece.content.kind === 'cards'
-        ? { compact }
-        : {}
+      : piece.content.kind === 'list'
+        ? { compact, openSlug, onOpenSlug }
+        : piece.content.kind === 'contact' || piece.content.kind === 'cards'
+          ? { compact }
+          : {}
 
   return <Body content={piece.content} color={piece.color} {...extra} />
 }

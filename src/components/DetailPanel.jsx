@@ -2,7 +2,13 @@ import { motion } from 'framer-motion'
 import BackButton from './detail/BackButton'
 import { PieceContent, rise } from './detail/Content'
 
-export default function DetailPanel({ piece, onBack, exiting = false }) {
+export default function DetailPanel({
+  piece,
+  onBack,
+  exiting = false,
+  openSlug = null,
+  onOpenSlug,
+}) {
   return (
     <motion.div
       className={`detail-scroll absolute inset-0 z-30 overflow-y-auto overscroll-contain${exiting ? ' pointer-events-none' : ''}`}
@@ -35,7 +41,7 @@ export default function DetailPanel({ piece, onBack, exiting = false }) {
             />
           </motion.div>
 
-          <PieceContent piece={piece} />
+          <PieceContent piece={piece} openSlug={openSlug} onOpenSlug={onOpenSlug} />
 
           <div className="h-16" />
         </div>

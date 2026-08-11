@@ -26,6 +26,7 @@ import {
 } from './lib/layout'
 import { focusRect, getFocusTarget } from './lib/focus'
 import { detailPadding, cameraSpring, exitHoldMs, returnHoldMs, zoomDelay } from './lib/pieceTiers'
+import { parseBlogRoute, writeBlogUrl } from './lib/blogRoutes'
 import { RESUME_URL } from './data/portfolio'
 import Piece from './components/Piece'
 import MarginZone from './components/MarginZone'
@@ -63,6 +64,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [phase, setPhase] = useState('board') // board | zooming | detail | exiting | returning
   const [hoveredId, setHoveredId] = useState(null)
+  const [blogSlug, setBlogSlug] = useState(null)
 
   const compact = vw < 640
   const scene = compact ? LAYOUT_MOBILE : LAYOUT
@@ -186,11 +188,60 @@ export default function App() {
     setSelectedId(id)
     setPhase('zooming')
     setHoveredId(null)
+    if (id === 'blog') {
+      setBlogSlug(null)
+      writeBlogUrl(null)
+    } else {
+      setBlogSlug(null)
+      writeBlogUrl(undefined)
+    }
   }, [])
 
   const back = useCallback(() => {
-    if (phase === 'detail') setPhase('exiting')
+    if (phase === 'detail') {
+      setBlogSlug(null)
+      writeBlogUrl(undefined)
+      setPhase('exiting')
+    }
   }, [phase])
+
+  const openBlogArticle = useCallback((slug) => {
+    setBlogSlug(slug)
+    // Opening an article pushes history; returning to the list replaces so
+    // browser Back leaves Blog instead of re-opening the same post.
+    writeBlogUrl(slug, { replace: slug == null })
+  }, [])
+
+  // Deep link: /blog or /blog/{slug} (also /#/blog/...)
+  useEffect(() => {
+    const route = parseBlogRoute()
+    if (route.kind !== 'blog') return
+    setSelectedId('blog')
+    setBlogSlug(route.slug)
+    setPhase('detail')
+    // Normalize hash forms to a clean path URL.
+    writeBlogUrl(route.slug, { replace: true })
+  }, [])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const route = parseBlogRoute()
+      if (route.kind === 'blog') {
+        setSelectedId('blog')
+        setBlogSlug(route.slug)
+        setHoveredId(null)
+        setPhase('detail')
+        return
+      }
+      setBlogSlug(null)
+      setPhase((current) => {
+        if (current === 'detail' || current === 'zooming') return 'exiting'
+        return current
+      })
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   useEffect(() => {
     if (phase !== 'board') {
@@ -408,7 +459,14 @@ export default function App() {
       </motion.footer>
 
       {showDetail && focus?.kind === 'piece' && focus.tier === 'detail' && (
-        <DetailPanel key={focus.id} piece={focus} onBack={back} exiting={panelExiting} />
+        <DetailPanel
+          key={focus.id}
+          piece={focus}
+          onBack={back}
+          exiting={panelExiting}
+          openSlug={focus.id === 'blog' ? blogSlug : null}
+          onOpenSlug={focus.id === 'blog' ? openBlogArticle : undefined}
+        />
       )}
       {showDetail && focus?.kind === 'piece' && focus.tier === 'compact' && (
         <CompactPanel key={focus.id} piece={focus} onBack={back} exiting={panelExiting} />

@@ -4,7 +4,7 @@ export default function BackButton({ color, onBack, compact = false }) {
   return (
     <motion.button
       onClick={onBack}
-      className={`group inline-flex items-center gap-2.5 text-base text-ink/55 transition-colors hover:text-ink sm:text-sm${compact ? '' : ''}`}
+      className={`group inline-flex cursor-pointer items-center gap-2.5 text-base text-ink/55 transition-colors hover:text-ink sm:text-sm${compact ? '' : ''}`}
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.12 }}
