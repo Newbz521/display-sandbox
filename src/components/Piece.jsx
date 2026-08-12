@@ -1,19 +1,24 @@
 import { memo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BLOCK_GAP, BLOCK_LIFT, CELL, RIPPLE_SPEED, THICKNESS, TOP_RADIUS } from '../lib/layout'
+import { BLOCK_GAP, BLOCK_LIFT, CELL, RIPPLE_SPEED, TOP_RADIUS } from '../lib/layout'
 import { scatterTransition } from '../lib/pieceTiers'
 import { darken, lighten, readableInk } from '../lib/color'
 
 const SIZE = CELL - BLOCK_GAP
 
 /**
- * One extruded block: a top face lifted by THICKNESS, plus the two side walls
- * that face the viewer. The other two walls point away and are never drawn.
+ * One extruded block: a top face lifted by the block's own height, plus the two
+ * side walls that face the viewer. The other two walls point away and are never
+ * drawn.
+ *
+ * Height comes from the piece's `series`, so neighbouring blocks stand at
+ * different heights instead of a uniform slab.
  *
  * Nothing here uses opacity or filter — both force `transform-style: flat` and
  * would collapse the extrusion.
  */
 function Block({ block, color, lit, lift, delay, onEnter }) {
+  const h = block.h
   const top = lit ? lighten(color, 0.16) : color
 
   return (
@@ -35,10 +40,10 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
         onPointerEnter={onEnter}
         style={{
           width: SIZE,
-          height: THICKNESS,
+          height: h,
           transformOrigin: '0 0',
           transform: `translateY(${SIZE}px) rotateX(90deg)`,
-          background: darken(color, 0.3),
+          background: `linear-gradient(to bottom, ${darken(color, 0.42)}, ${darken(color, 0.22)})`,
           borderBottomLeftRadius: TOP_RADIUS * 0.5,
           borderBottomRightRadius: TOP_RADIUS * 0.5,
           pointerEvents: 'auto',
@@ -49,11 +54,11 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
         className="absolute left-0 top-0"
         onPointerEnter={onEnter}
         style={{
-          width: THICKNESS,
+          width: h,
           height: SIZE,
           transformOrigin: '0 0',
           transform: `translateX(${SIZE}px) rotateY(-90deg)`,
-          background: darken(color, 0.17),
+          background: `linear-gradient(to right, ${darken(color, 0.34)}, ${darken(color, 0.1)})`,
           borderTopRightRadius: TOP_RADIUS * 0.5,
           borderBottomRightRadius: TOP_RADIUS * 0.5,
           pointerEvents: 'auto',
@@ -63,7 +68,7 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
       <div
         className="absolute inset-0 grid place-items-center"
         style={{
-          transform: `translateZ(${THICKNESS}px)`,
+          transform: `translateZ(${h}px)`,
           borderRadius: TOP_RADIUS,
           background: `linear-gradient(155deg, ${lighten(top, 0.06)} 0%, ${top} 60%, ${darken(top, 0.04)} 100%)`,
         }}
@@ -96,7 +101,7 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
           top: -BLOCK_GAP / 2 - 1,
           width: CELL + 2,
           height: CELL + 2,
-          transform: `translateZ(${THICKNESS + 0.5}px)`,
+          transform: `translateZ(${h + 0.5}px)`,
           pointerEvents: 'auto',
         }}
       />
@@ -108,14 +113,17 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
  * A block's cast shadow. It is a sibling of the blocks rather than a child, so
  * that a rising block leaves it behind: the shadow stays put on the board and
  * only spreads and fades, the way a real one does as its object lifts away.
+ * Taller bars throw it a little further — a cheap height cue.
  */
 function Shadow({ block, lifted, delay }) {
+  const reach = block.h * 0.22
+
   return (
     <motion.div
       className="absolute"
       style={{
-        left: block.x + BLOCK_GAP / 2 + 13,
-        top: block.y + BLOCK_GAP / 2 + 17,
+        left: block.x + BLOCK_GAP / 2 + reach * 0.72,
+        top: block.y + BLOCK_GAP / 2 + reach,
         width: SIZE,
         height: SIZE,
         borderRadius: TOP_RADIUS,

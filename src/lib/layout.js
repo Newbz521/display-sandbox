@@ -8,11 +8,39 @@ import { MARGINS } from '../data/margins'
  *
  * The camera is a translate + scale applied to that whole tilted board, which
  * is what lets "zoom until this piece fills the viewport" stay exact.
+ *
+ * Block height is not a constant here — it is data. Each piece carries a
+ * `series` of one value per cell, and `barHeight` maps that to world units, so
+ * the square reads as a set of varied extrusions rather than a flat tiling.
  */
 export const CELL = 100 // one block's footprint
 export const BLOCK_GAP = 7 // air between neighbouring blocks
-export const THICKNESS = 28 // how tall a block stands off the board
 export const TOP_RADIUS = 9 // corner rounding on the top face
+
+/**
+ * The bar range. BAR_MIN is deliberately non-zero: a zero-height bar loses its
+ * side walls, and with them the only cue that this is a 3D scene at all.
+ * The range between them is what is really capped. A bar's cap rides up the
+ * screen by `h · sin(TILT_X)`, and rows are only `CELL · cos(TILT_X)` apart, so
+ * once BAR_MAX − BAR_MIN passes about 115 a tall bar in front starts covering
+ * the letter on the bar behind it — and the word stops being readable, which is
+ * the one thing the square cannot afford to lose. 74 leaves clear air.
+ *
+ * The same maths is why the `series` in portfolio.js put their big swings along
+ * a piece's horizontal runs and keep neighbouring rows close: depth is where
+ * height costs you legibility, width is free.
+ */
+export const BAR_MIN = 14
+export const BAR_MAX = 88
+
+/** Height of the tallest possible bar — what the camera has to frame. */
+export const THICKNESS = BAR_MAX
+
+/** A series value in 0–1 → a bar height in world units. */
+export function barHeight(value) {
+  const v = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5
+  return BAR_MIN + v * (BAR_MAX - BAR_MIN)
+}
 
 /**
  * Two-point perspective. The extrusion axis always projects straight up the
@@ -44,8 +72,9 @@ export const SPREAD_FIXED = 21
 
 // Hovering a piece ripples through its own blocks: the block under the cursor
 // rises first, and the rest of that piece follows outward from it. Other pieces
-// are untouched.
-export const BLOCK_LIFT = 40 // how high a block rises, world units
+// are untouched. The lift is small relative to BAR_MAX — the bars already vary
+// in height, and a big lift would read as the data changing.
+export const BLOCK_LIFT = 24 // how high a block rises, world units
 export const RIPPLE_SPEED = 900 // world units per second the ripple travels
 
 /** Board-plane layering — grid on the slab, margin sheets taped above it. */
@@ -84,13 +113,16 @@ function build() {
     const height = (b.maxRow - b.minRow + 1) * CELL
 
     // A piece has exactly as many blocks as its code has letters, so the word
-    // sets into the shape one letter per block, in row-major reading order.
+    // sets into the shape one letter per block, in row-major reading order —
+    // and the `series` value at that same index sets how tall the bar stands.
     const blocks = [...piece.cells]
       .sort((p, q) => p[0] - q[0] || p[1] - q[1])
       .map(([r, c], i) => ({
         x: (c - b.minCol) * CELL,
         y: (r - b.minRow) * CELL,
         char: (piece.short ?? '')[i] ?? '',
+        value: piece.series?.[i] ?? 0.5,
+        h: barHeight(piece.series?.[i]),
       }))
 
     const tightX = b.minCol * CELL

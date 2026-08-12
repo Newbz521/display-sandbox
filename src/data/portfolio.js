@@ -17,6 +17,11 @@
  * `cells` are [row, col] pairs on that grid. The layout, the 3D geometry, the
  * scatter directions, and the letter placement are all derived from them.
  *
+ * Every piece also carries a `series`: one number in 0–1 per cell, in the same
+ * row-major order as the letters. That number sets how tall the block stands,
+ * so neighbouring bars vary instead of reading as one flat slab. Big swings sit
+ * along horizontal runs; neighbouring rows stay close so letters stay readable.
+ *
  * Content here comes from public/Lawrence Yee Resume 2026 (1).pdf.
  */
 
@@ -37,6 +42,8 @@ export const PIECES = [{
         label: 'About',
         kicker: 'Who you are talking to',
         color: '#6e86b8',
+        // Flat and even — the anchor piece.
+        series: [0.46, 0.54, 0.44, 0.58, 0.5],
         cells: [
             [5, 0],
             [5, 1],
@@ -48,8 +55,8 @@ export const PIECES = [{
             kind: 'intro',
             lead: 'A New York software developer with a background in architecture, bringing the same methodical planning, intentional design, and floor-plan-level attention to detail to every build.',
             body: [
-                'I studied Architectural Technology at City Tech and spent a year designing buildings before going through General Assembly and moving into software. That route left me comfortable in the places most engineers avoid: 3D and geometry, drawings that have to be exact, and clients who describe what they want in a language that is not code.',
-                'Since then I have built internal platforms for legal teams, generative design tooling for architects, a multiplayer game engine-side, and a handful of sites for small non-profits. The through-line is interfaces for people doing precise work.',
+                'I studied Architectural Technology at City Tech, spent a year designing buildings, then went through General Assembly into software. That combination gave me strength in areas a lot of engineers shy away from: visual thinking, spatial judgment, translating what a client describes in plain language into something technically concrete.',
+                "Give me a vague vision and zero instructions, and I'm in my element. I've always believed the best requirements come from making real things, not writing documents. I've brought that same 'figure it out' energy to a bit of everything over the years: legal tools, generative design engines, multiplayer games, and nonprofit sites.",
             ],
             stats: [
                 { value: '2022', label: 'Moved into software' },
@@ -75,6 +82,7 @@ export const PIECES = [{
         label: 'Work',
         kicker: 'Where the hours went',
         color: '#1d2951',
+        series: [0.42, 0.58, 0.74, 0.9],
         cells: [
             [0, 0],
             [1, 0],
@@ -168,6 +176,8 @@ export const PIECES = [{
         label: 'Projects',
         kicker: 'Things I have built',
         color: '#e8785c',
+        // Big swings along the horizontal JECTS run; PRO stays closer.
+        series: [0.55, 0.72, 0.88, 0.38, 0.5, 0.62, 0.79, 0.95],
         cells: [
             [3, 2],
             [3, 3],
@@ -222,6 +232,7 @@ export const PIECES = [{
         label: 'Toolkit',
         kicker: 'What I reach for',
         color: '#7fbfa6',
+        series: [0.62, 0.55, 0.7, 0.48, 0.66, 0.58, 0.44],
         cells: [
             [1, 2],
             [1, 3],
@@ -270,6 +281,7 @@ export const PIECES = [{
         label: 'Blog',
         kicker: 'Thinking out loud',
         color: '#a99be0',
+        series: [0.35, 0.82, 0.46, 0.63],
         cells: [
             [0, 2],
             [0, 3],
@@ -331,7 +343,11 @@ Maybe the biggest opportunity for AI isn't replacing architects at all. Maybe it
                     slug: 'slowing-down',
                     title: 'Slowing down',
                     date: '08/11/2026',
-                    blurb: `I was doing a little shopping in SoHo with my wife. She went into the fitting room, so naturally I found one of those couches sitting between the clothing aisles and took a seat.
+                    blurb: `I've been thinking a lot about the difference between actually understanding how to use AI and simply being excited that AI can do something.
+
+A random conversation I overheard in SoHo put a sharper edge on that.
+
+I was shopping with my wife. She went into the fitting room, so naturally I found one of those couches sitting between the clothing aisles and took a seat.
 
 While sitting there, I couldn't help but overhear a conversation between two friends. One of them was a young animator working for a studio.
 
@@ -377,6 +393,7 @@ That's just someone discovering a new button and wanting to press it.`,
         label: 'Playground',
         kicker: 'Side builds, all live',
         color: '#d9b98c',
+        series: [0.5, 0.66, 0.58, 0.78],
         cells: [
             [0, 1],
             [1, 1],
@@ -430,6 +447,7 @@ That's just someone discovering a new button and wanting to press it.`,
         label: 'Contact',
         kicker: 'Say hello',
         color: '#35786e',
+        series: [0.3, 0.44, 0.36, 0.52],
         cells: [
             [2, 5],
             [3, 5],
