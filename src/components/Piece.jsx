@@ -17,9 +17,17 @@ const SIZE = CELL - BLOCK_GAP
  * Nothing here uses opacity or filter — both force `transform-style: flat` and
  * would collapse the extrusion.
  */
-function Block({ block, color, lit, lift, delay, onEnter }) {
+function Block({ block, color, lit, lift, delay, onEnter, onClick, onPointerDown, onPaintEnter }) {
   const h = block.h
   const top = lit ? lighten(color, 0.16) : color
+  const interact = {
+    onClick,
+    onPointerDown,
+    onPointerEnter: (e) => {
+      onEnter?.(e)
+      onPaintEnter?.(e)
+    },
+  }
 
   return (
     <motion.div
@@ -31,13 +39,14 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
         height: SIZE,
         transformStyle: 'preserve-3d',
       }}
+      initial={false}
       animate={{ z: lift }}
       transition={{ type: 'spring', stiffness: 260, damping: 22, delay }}
     >
       {/* south wall — the cut edge of the card, so only slightly darker */}
       <div
         className="absolute left-0 top-0"
-        onPointerEnter={onEnter}
+        {...interact}
         style={{
           width: SIZE,
           height: h,
@@ -52,7 +61,7 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
       {/* east wall */}
       <div
         className="absolute left-0 top-0"
-        onPointerEnter={onEnter}
+        {...interact}
         style={{
           width: h,
           height: SIZE,
@@ -67,10 +76,13 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
       {/* top face — matte, barely graded. Paper, not plastic. */}
       <div
         className="absolute inset-0 grid place-items-center"
+        {...interact}
         style={{
           transform: `translateZ(${h}px)`,
           borderRadius: TOP_RADIUS,
           background: `linear-gradient(155deg, ${lighten(top, 0.06)} 0%, ${top} 60%, ${darken(top, 0.04)} 100%)`,
+          pointerEvents: onClick || onPointerDown ? 'auto' : undefined,
+          cursor: onClick || onPointerDown ? 'pointer' : undefined,
         }}
       >
         <span
@@ -94,7 +106,7 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
         apart that these never touch across a boundary.
       */}
       <div
-        onPointerEnter={onEnter}
+        {...interact}
         className="absolute"
         style={{
           left: -BLOCK_GAP / 2 - 1,
@@ -103,6 +115,7 @@ function Block({ block, color, lit, lift, delay, onEnter }) {
           height: CELL + 2,
           transform: `translateZ(${h + 0.5}px)`,
           pointerEvents: 'auto',
+          cursor: onClick || onPointerDown ? 'pointer' : undefined,
         }}
       />
     </motion.div>
@@ -155,6 +168,7 @@ function Piece({
   onHover,
   reduceMotion,
   allowFloat = true,
+  onCellClick = null,
 }) {
   const idle = phase === 'board'
   const floating = phase === 'board' && allowFloat
@@ -164,6 +178,7 @@ function Piece({
   const settling = phase === 'board' && !allowFloat
   const inMotion = scattered || returning || settling
   const lit = isHovered || isSelected
+  const cellMode = typeof onCellClick === 'function'
 
   // Which block the cursor came in on. It anchors the ripple, and is held until
   // the pointer leaves the piece so that crossing between blocks does not
@@ -191,17 +206,17 @@ function Piece({
   return (
     <motion.div
       role="button"
-      tabIndex={idle ? 0 : -1}
+      tabIndex={idle && !cellMode ? 0 : -1}
       aria-label={`${piece.label} — ${piece.kicker}`}
-      onClick={() => idle && onSelect(piece.id)}
-      onPointerEnter={() => idle && onHover(piece.id)}
-      onPointerLeave={() => idle && onHover(null)}
-      onFocus={() => idle && onHover(piece.id)}
-      onBlur={() => idle && onHover(null)}
+      onClick={() => idle && !cellMode && onSelect?.(piece.id)}
+      onPointerEnter={() => idle && onHover?.(piece.id)}
+      onPointerLeave={() => idle && onHover?.(null)}
+      onFocus={() => idle && onHover?.(piece.id)}
+      onBlur={() => idle && onHover?.(null)}
       onKeyDown={(e) => {
-        if (idle && (e.key === 'Enter' || e.key === ' ')) {
+        if (!cellMode && idle && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
-          onSelect(piece.id)
+          onSelect?.(piece.id)
         }
       }}
       className="absolute outline-none"
@@ -216,6 +231,7 @@ function Piece({
         pointerEvents: 'none',
         cursor: idle ? 'pointer' : 'default',
       }}
+      initial={false}
       animate={away}
       transition={
         inMotion
@@ -227,6 +243,7 @@ function Piece({
       <motion.div
         className="h-full w-full"
         style={{ transformStyle: 'preserve-3d' }}
+        initial={false}
         animate={floating && !reduceMotion ? { z: [0, 16, 0, -10, 0] } : { z: 0 }}
         transition={
           floating && !reduceMotion
@@ -257,6 +274,25 @@ function Piece({
               lift={lift}
               delay={delay}
               onEnter={() => enterBlock(i)}
+              onClick={undefined}
+              onPointerDown={
+                cellMode
+                  ? (e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      onCellClick(block, { dragStart: true })
+                    }
+                  : undefined
+              }
+              onPaintEnter={
+                cellMode
+                  ? (e) => {
+                      if (e.buttons !== 1) return
+                      e.stopPropagation()
+                      onCellClick(block, { dragging: true })
+                    }
+                  : undefined
+              }
             />
           )
         })}

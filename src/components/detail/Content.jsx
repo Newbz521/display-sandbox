@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { blogArticlePath, findPostBySlug, postSlug } from '../../lib/blogRoutes'
+import Comments from './Comments'
 
 export const rise = {
   hidden: { opacity: 0, y: 24 },
@@ -214,15 +215,24 @@ function articleParagraphs(item) {
     .filter(Boolean)
 }
 
-function ArticleView({ item, color, onBack }) {
+function ArticleView({ item, color, onBack, canWrite = false, onDeletePost }) {
   const paragraphs = articleParagraphs(item)
   const [copied, setCopied] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [commentCount, setCommentCount] = useState(0)
+  const commentsRef = useRef(null)
+  const live = item.source === 'live'
 
   useEffect(() => {
     if (!copied) return
     const t = setTimeout(() => setCopied(false), 2000)
     return () => clearTimeout(t)
   }, [copied])
+
+  useEffect(() => {
+    setCommentsOpen(false)
+  }, [item])
 
   const share = async () => {
     const slug = postSlug(item)
@@ -237,8 +247,31 @@ function ArticleView({ item, color, onBack }) {
     }
   }
 
+  const remove = async () => {
+    if (!onDeletePost || deleting) return
+    setDeleting(true)
+    try {
+      await onDeletePost(item)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const openComments = () => {
+    const next = !commentsOpen
+    setCommentsOpen(next)
+    if (next) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => commentsRef.current?.scrollIntoView?.())
+      })
+    }
+  }
+
+  const actionBtn =
+    'shrink-0 cursor-pointer rounded-lg border border-ink/15 bg-card px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink sm:text-[10px] sm:tracking-[0.16em]'
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <motion.button
         type="button"
         onClick={onBack}
@@ -257,26 +290,45 @@ function ArticleView({ item, color, onBack }) {
 
       <Section i={0}>
         <div className={`${label} tracking-[0.28em]`}>{item.date}</div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
             {item.title}
           </h2>
           <button
             type="button"
             onClick={share}
-            className={`shrink-0 cursor-pointer rounded-lg border px-3 py-1.5 text-xs uppercase tracking-[0.14em] transition-colors sm:text-[10px] sm:tracking-[0.16em] ${
-              copied
-                ? 'border-current bg-card'
-                : 'border-ink/15 bg-card text-ink/55 hover:border-ink/30 hover:text-ink'
-            }`}
+            className={`${actionBtn}${copied ? ' border-current' : ''}`}
             style={copied ? { color, borderColor: `${color}66`, background: `${color}12` } : undefined}
             aria-live="polite"
           >
             {copied ? 'Link Copied' : 'Share'}
           </button>
+          <button
+            type="button"
+            onClick={openComments}
+            className={actionBtn}
+            style={
+              commentsOpen
+                ? { color, borderColor: `${color}66`, background: `${color}12` }
+                : undefined
+            }
+            aria-expanded={commentsOpen}
+          >
+            {commentCount > 0 ? `Comment · ${commentCount}` : 'Comment'}
+          </button>
+          {canWrite && live ? (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={deleting}
+              className="shrink-0 cursor-pointer rounded-lg border border-ink/15 bg-card px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-ink/45 transition-colors hover:border-[#b4553c]/40 hover:text-[#b4553c] disabled:cursor-not-allowed disabled:opacity-50 sm:text-[10px] sm:tracking-[0.16em]"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          ) : null}
         </div>
         <div
-          className="mt-8 h-px w-full"
+          className="mt-5 h-px w-full"
           style={{ background: `linear-gradient(90deg, ${color}88, transparent)` }}
         />
       </Section>
@@ -290,11 +342,20 @@ function ArticleView({ item, color, onBack }) {
           </Section>
         ))}
       </div>
+
+      <Comments
+        ref={commentsRef}
+        item={item}
+        color={color}
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        onCountChange={setCommentCount}
+      />
     </div>
   )
 }
 
-function List({ content, color, compact = false, openSlug = null, onOpenSlug }) {
+function List({ content, color, compact = false, openSlug = null, onOpenSlug, canWrite = false, onCompose, onDeletePost }) {
   const items = postsNewestFirst(content.items)
   const controlled = typeof onOpenSlug === 'function'
   const [localArticle, setLocalArticle] = useState(null)
@@ -314,39 +375,74 @@ function List({ content, color, compact = false, openSlug = null, onOpenSlug }) 
   }
 
   if (article) {
-    return <ArticleView item={article} color={color} onBack={closeArticle} />
+    return (
+      <ArticleView
+        item={article}
+        color={color}
+        onBack={closeArticle}
+        canWrite={canWrite}
+        onDeletePost={onDeletePost}
+      />
+    )
   }
 
   const titleClass =
     'text-xl font-medium text-ink/90 transition-colors group-hover:text-ink sm:text-lg'
 
   return (
-    <div className="divide-y divide-ink/10">
-      {items.map((item, i) => {
+    <div>
+      {canWrite ? (
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={onCompose}
+            className="cursor-pointer rounded-lg border border-ink/15 bg-card px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink"
+          >
+            New post
+          </button>
+        </div>
+      ) : null}
+      <div className="divide-y divide-ink/10">
+        {items.map((item, i) => {
         const readable = !item.link || item.link === '#'
         const preview = excerpt(item.blurb)
 
         if (readable) {
           return (
             <Section key={item.title} i={i}>
-              <button
-                type="button"
-                onClick={() => openArticle(item)}
-                className="group block w-full py-5 text-left sm:py-5"
-              >
-                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                  <h3 className={titleClass}>{item.title}</h3>
-                  <span className={`shrink-0 ${meta}`}>{item.date}</span>
-                </div>
-                {preview ? <p className={`mt-2 max-w-2xl text-ink/60 ${body}`}>{preview}</p> : null}
-                <span
-                  className="mt-3 inline-flex items-center gap-1.5 text-sm uppercase tracking-[0.16em] sm:text-xs"
-                  style={{ color }}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => openArticle(item)}
+                  className="group block w-full py-5 text-left sm:py-5"
                 >
-                  Read post
-                  <span className="transition-transform group-hover:translate-x-0.5">→</span>
-                </span>
-              </button>
+                  <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    <h3 className={titleClass}>{item.title}</h3>
+                    <span className={`shrink-0 ${meta}`}>{item.date}</span>
+                  </div>
+                  {preview ? <p className={`mt-2 max-w-2xl text-ink/60 ${body}`}>{preview}</p> : null}
+                  <span
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm uppercase tracking-[0.16em] sm:text-xs"
+                    style={{ color }}
+                  >
+                    Read post
+                    <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                  </span>
+                </button>
+                {canWrite && item.source === 'live' && onDeletePost ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onDeletePost(item)
+                    }}
+                    className="absolute bottom-5 right-0 cursor-pointer text-xs uppercase tracking-[0.14em] text-ink/30 transition-colors hover:text-[#b4553c] sm:text-[10px]"
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
             </Section>
           )
         }
@@ -373,6 +469,7 @@ function List({ content, color, compact = false, openSlug = null, onOpenSlug }) 
           </Section>
         )
       })}
+    </div>
     </div>
   )
 }
@@ -448,6 +545,9 @@ export function PieceContent({
   dense = false,
   openSlug = null,
   onOpenSlug,
+  canWrite = false,
+  onCompose,
+  onDeletePost,
 }) {
   const Body = RENDERERS[piece.content.kind]
   if (!Body) return null
@@ -456,7 +556,7 @@ export function PieceContent({
     piece.content.kind === 'groups'
       ? { dense }
       : piece.content.kind === 'list'
-        ? { compact, openSlug, onOpenSlug }
+        ? { compact, openSlug, onOpenSlug, canWrite, onCompose, onDeletePost }
         : piece.content.kind === 'contact' || piece.content.kind === 'cards'
           ? { compact }
           : {}

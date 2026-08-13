@@ -27,12 +27,14 @@ export function findPostBySlug(items, slug) {
   return items.find((item) => postSlug(item) === slug) ?? null
 }
 
-/** @returns {{ kind: 'home' } | { kind: 'blog', slug: string | null }} */
+/** @returns {{ kind: 'home' } | { kind: 'write' } | { kind: 'blog', slug: string | null }} */
 export function parseBlogRoute(location = typeof window === 'undefined' ? null : window.location) {
   if (!location) return { kind: 'home' }
 
   const path = (location.pathname || '/').replace(/\/+$/, '') || '/'
   const hash = (location.hash || '').replace(/^#/, '')
+
+  if (path === '/write') return { kind: 'write' }
 
   // /blog or /blog/slug
   if (path === '/blog' || path.startsWith('/blog/')) {
@@ -43,6 +45,7 @@ export function parseBlogRoute(location = typeof window === 'undefined' ? null :
 
   // /#/blog or /#/blog/slug  (and bare #blog / #blog/slug)
   const hashPath = hash.startsWith('/') ? hash.slice(1) : hash
+  if (hashPath === 'write') return { kind: 'write' }
   if (hashPath === 'blog' || hashPath.startsWith('blog/')) {
     const rest = hashPath === 'blog' ? '' : hashPath.slice('blog/'.length)
     const slug = rest.split('/').filter(Boolean)[0] || null
@@ -50,6 +53,10 @@ export function parseBlogRoute(location = typeof window === 'undefined' ? null :
   }
 
   return { kind: 'home' }
+}
+
+export function writeDeskPath() {
+  return '/write'
 }
 
 export function blogListPath() {
@@ -65,6 +72,15 @@ export function writeBlogUrl(slug, { replace = false } = {}) {
   const next = slug === undefined ? '/' : blogArticlePath(slug)
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
   if (current === next || (next === '/' && (current === '/' || current === ''))) return
+  const method = replace ? 'replaceState' : 'pushState'
+  window.history[method](null, '', next)
+}
+
+export function writeDeskUrl({ replace = false } = {}) {
+  if (typeof window === 'undefined') return
+  const next = writeDeskPath()
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  if (current === next) return
   const method = replace ? 'replaceState' : 'pushState'
   window.history[method](null, '', next)
 }

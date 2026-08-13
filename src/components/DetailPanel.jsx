@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import BackButton from './detail/BackButton'
+import EditButton from './detail/EditButton'
 import { PieceContent, rise } from './detail/Content'
 
 export default function DetailPanel({
@@ -8,7 +9,14 @@ export default function DetailPanel({
   exiting = false,
   openSlug = null,
   onOpenSlug,
+  canWrite = false,
+  onCompose,
+  onDeletePost,
+  canEdit = false,
+  onEdit,
 }) {
+  const readingArticle = Boolean(openSlug)
+
   return (
     <motion.div
       className={`detail-scroll absolute inset-0 z-30 overflow-y-auto overscroll-contain${exiting ? ' pointer-events-none' : ''}`}
@@ -20,30 +28,40 @@ export default function DetailPanel({
       <div className="pointer-events-none fixed inset-0 bg-linear-to-b from-paper/87 via-paper/93 to-paper/98" />
 
       <div className="relative mx-auto min-h-full w-full max-w-4xl px-6 sm:px-10">
-        <div className="sticky top-0 z-40 -mx-6 border-b border-ink/8 bg-paper/88 px-6 py-4 backdrop-blur-sm sm:-mx-10 sm:px-10">
+        <div className="sticky top-0 z-40 -mx-6 flex items-center border-b border-ink/8 bg-paper/88 px-6 py-4 backdrop-blur-sm sm:-mx-10 sm:px-10">
           <BackButton color={piece.color} onBack={onBack} />
+          {canEdit ? <EditButton color={piece.color} onEdit={onEdit} className="ml-auto" /> : null}
         </div>
 
-        <div className="py-12 sm:py-14">
-          <motion.div variants={rise} initial="hidden" animate="show">
-            <div
-              className="text-sm uppercase tracking-[0.28em] sm:text-xs"
-              style={{ color: piece.color }}
-            >
-              {piece.kicker}
-            </div>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-ink sm:text-7xl">
-              {piece.label}
-            </h1>
-            <div
-              className="mt-8 mb-12 h-px w-full"
-              style={{ background: `linear-gradient(90deg, ${piece.color}88, transparent)` }}
-            />
-          </motion.div>
+        <div className={readingArticle ? 'pb-10 pt-6 sm:pb-12 sm:pt-8' : 'py-12 sm:py-14'}>
+          {!readingArticle ? (
+            <motion.div variants={rise} initial="hidden" animate="show">
+              <div
+                className="text-sm uppercase tracking-[0.28em] sm:text-xs"
+                style={{ color: piece.color }}
+              >
+                {piece.kicker}
+              </div>
+              <h1 className="mt-3 text-4xl font-semibold tracking-tight text-ink sm:text-7xl">
+                {piece.label}
+              </h1>
+              <div
+                className="mt-8 mb-12 h-px w-full"
+                style={{ background: `linear-gradient(90deg, ${piece.color}88, transparent)` }}
+              />
+            </motion.div>
+          ) : null}
 
-          <PieceContent piece={piece} openSlug={openSlug} onOpenSlug={onOpenSlug} />
+          <PieceContent
+            piece={piece}
+            openSlug={openSlug}
+            onOpenSlug={onOpenSlug}
+            canWrite={canWrite}
+            onCompose={onCompose}
+            onDeletePost={onDeletePost}
+          />
 
-          <div className="h-16" />
+          <div className={readingArticle ? 'h-8' : 'h-16'} />
         </div>
       </div>
     </motion.div>

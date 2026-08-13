@@ -26,8 +26,19 @@ import {
 } from './lib/layout'
 import { focusRect, getFocusTarget } from './lib/focus'
 import { detailPadding, cameraSpring, exitHoldMs, returnHoldMs, zoomDelay } from './lib/pieceTiers'
-import { parseBlogRoute, writeBlogUrl } from './lib/blogRoutes'
-import { RESUME_URL } from './data/portfolio'
+import { parseBlogRoute, writeBlogUrl, writeDeskUrl } from './lib/blogRoutes'
+import { parsePlayRoute, writePlayUrl } from './lib/playRoutes'
+import { BLOG_SEED } from './data/blogSeed'
+import { OWNER, RESUME_URL } from './data/portfolio'
+import { useAuth } from './lib/AuthContext'
+import { deletePost, mergeBlogPosts, seedLocalPosts, subscribePosts } from './lib/blogStore'
+import {
+  applyLivePage,
+  applyLiveSite,
+  seedPages,
+  subscribePages,
+  subscribeSite,
+} from './lib/contentStore'
 import Piece from './components/Piece'
 import MarginZone from './components/MarginZone'
 import DraftingGrid from './components/DraftingGrid'
@@ -36,7 +47,24 @@ import DetailPanel from './components/DetailPanel'
 import CompactPanel from './components/CompactPanel'
 import DockPanel from './components/DockPanel'
 import MarginPanel from './components/MarginPanel'
+import WriteDesk from './components/WriteDesk'
 import CameraDebug, { createCameraDebugDefaults } from './components/CameraDebug'
+import SandboxTray from './components/SandboxTray'
+import SandboxBoard from './components/SandboxBoard'
+import SandboxEntry from './components/SandboxEntry'
+import SandboxExpired from './components/SandboxExpired'
+import {
+  adjustCellHeight,
+  buildPlayScene,
+  createSandboxState,
+  eraseCell,
+  resetSandbox,
+  setCellChar,
+  setSandboxColor,
+  stampCell,
+  startNewPiece,
+} from './lib/sandbox'
+import { loadSandbox, saveSandbox } from './lib/sandboxStore'
 
 const CAMERA_DEBUG_URL = new URLSearchParams(
   typeof window === 'undefined' ? '' : window.location.search,
@@ -65,9 +93,35 @@ export default function App() {
   const [phase, setPhase] = useState('board') // board | zooming | detail | exiting | returning
   const [hoveredId, setHoveredId] = useState(null)
   const [blogSlug, setBlogSlug] = useState(null)
+  const [deskOpen, setDeskOpen] = useState(
+    () => (typeof window === 'undefined' ? false : parseBlogRoute().kind === 'write'),
+  )
+  const [deskView, setDeskView] = useState('home')
+  const [livePosts, setLivePosts] = useState([])
+  const [livePages, setLivePages] = useState({})
+  const [liveSite, setLiveSite] = useState(null)
+  const [sandboxOpen, setSandboxOpen] = useState(false)
+  const [sandboxState, setSandboxState] = useState(createSandboxState)
+  const [sandboxTool, setSandboxTool] = useState('stamp')
+  const [sandboxPhase, setSandboxPhase] = useState('board') // board | zooming | returning
+  const [sandboxFocus, setSandboxFocus] = useState(null) // { row, col } | null
+  const [sandboxViewOnly, setSandboxViewOnly] = useState(false)
+  const [sandboxExpired, setSandboxExpired] = useState(false)
+  const [sandboxLoading, setSandboxLoading] = useState(
+    () => (typeof window === 'undefined' ? false : parsePlayRoute().kind === 'play'),
+  )
+  const [sandboxShareBusy, setSandboxShareBusy] = useState(false)
+  const [sandboxShareMessage, setSandboxShareMessage] = useState('')
+  const [sandboxShareError, setSandboxShareError] = useState('')
+  const { isOwner } = useAuth()
 
   const compact = vw < 640
-  const scene = compact ? LAYOUT_MOBILE : LAYOUT
+  const portfolioScene = compact ? LAYOUT_MOBILE : LAYOUT
+  const playScene = useMemo(() => buildPlayScene(sandboxState), [sandboxState])
+  // While a shared link is loading, frame the play board (not the home layout)
+  // so the veil never lifts onto a camera mid-spring from portfolio → sandbox.
+  const scene = sandboxOpen || sandboxLoading ? playScene : portfolioScene
+  const suppressHomeBoard = sandboxLoading || sandboxOpen || sandboxExpired
 
   const [cameraDebugOpen, setCameraDebugOpen] = useState(CAMERA_DEBUG_URL)
   const [cameraDebugPanelVisible, setCameraDebugPanelVisible] = useState(true)
@@ -115,15 +169,35 @@ export default function App() {
   const [floatReady, setFloatReady] = useState(true)
   const [gridReady, setGridReady] = useState(true)
   const frozenAccentRef = useRef(null)
+  const ignorePanelBackUntil = useRef(0)
+  const sandboxScatterTimers = useRef([])
+  const playLoadGen = useRef(0)
 
   const focus = useMemo(() => getFocusTarget(selectedId, scene), [selectedId, scene])
-  const hovered = useMemo(() => getFocusTarget(hoveredId, scene), [hoveredId, scene])
-  const onBoard = phase === 'board'
-  const showFooter = phase === 'board'
-  const showDetail = phase === 'detail' || phase === 'exiting' || phase === 'returning'
+  const blogItems = useMemo(() => mergeBlogPosts([], livePosts), [livePosts])
+  const focusedPiece = useMemo(() => {
+    if (focus?.kind !== 'piece') return focus
+    const live = applyLivePage(focus, livePages)
+    if (live.id !== 'blog') return live
+    return { ...live, content: { ...live.content, items: blogItems } }
+  }, [focus, livePages, blogItems])
+  const hovered = useMemo(
+    () => applyLivePage(getFocusTarget(hoveredId, scene), livePages),
+    [hoveredId, scene, livePages],
+  )
+  const owner = useMemo(() => applyLiveSite(OWNER, liveSite), [liveSite])
+  const onBoard = phase === 'board' && !sandboxOpen && !sandboxLoading && !sandboxExpired
+  const showFooter = phase === 'board' && !sandboxOpen && !sandboxLoading && !sandboxExpired
+  const showDetail =
+    !sandboxOpen &&
+    !sandboxLoading &&
+    !sandboxExpired &&
+    (phase === 'detail' || phase === 'exiting' || phase === 'returning')
   const panelExiting = phase === 'exiting' || phase === 'returning'
-  const showGrid = phase === 'board' && gridReady
-  const sceneTransitioning = phase === 'zooming' || phase === 'exiting' || phase === 'returning'
+  const showGrid = phase === 'board' && gridReady && !suppressHomeBoard
+  const sceneTransitioning =
+    (!sandboxOpen && (phase === 'zooming' || phase === 'exiting' || phase === 'returning')) ||
+    (sandboxOpen && (sandboxPhase === 'zooming' || sandboxPhase === 'returning'))
 
   const camera = useMemo(() => {
     const mobileFooter = cameraDebugOpen ? cameraDebug.mobileFooter : MOBILE_FOOTER_RESERVE
@@ -141,15 +215,19 @@ export default function App() {
         : 0
 
     // Pull back to the board while the panel fades — avoids a camera + piece spike at `returning`.
-    const pullToBoard = !focus || phase === 'exiting' || phase === 'returning'
+    const pullToBoard =
+      sandboxOpen || sandboxLoading || !focus || phase === 'exiting' || phase === 'returning'
 
     if (pullToBoard) {
-      const frame = compact ? mobileBoardFocus(scene) : { x: 0, y: 0, ...scene.world }
+      const frame =
+        sandboxOpen || sandboxLoading || !compact
+          ? { x: 0, y: 0, width: scene.world.width, height: scene.world.height }
+          : mobileBoardFocus(scene)
       return cameraFor(frame, vw, camVh, {
         layout: scene,
         tiltX: sceneTilt,
         spinZ: sceneSpin,
-        padding,
+        padding: sandboxOpen || sandboxLoading ? 0.78 : padding,
         maxScale: 12,
         scaleMultiplier,
         viewOffsetY,
@@ -166,25 +244,36 @@ export default function App() {
       scaleMultiplier: cameraDebugOpen ? scaleMultiplier : 1,
       viewOffsetY: cameraDebugOpen ? viewOffsetY : 0,
     })
-  }, [focus, phase, vw, vh, scene, sceneTilt, sceneSpin, compact, cameraDebugOpen, cameraDebug])
+  }, [focus, phase, vw, vh, scene, sceneTilt, sceneSpin, compact, cameraDebugOpen, cameraDebug, sandboxOpen, sandboxLoading])
 
   const spring = useMemo(() => {
     if (cameraDebugOpen) return { stiffness: 800, damping: 50 }
+    if (sandboxLoading) return { stiffness: 800, damping: 50 }
+    if (sandboxOpen) return cameraSpring(sandboxPhase, reduceMotion)
     return cameraSpring(phase, reduceMotion)
-  }, [phase, reduceMotion, cameraDebugOpen])
+  }, [phase, sandboxPhase, sandboxOpen, sandboxLoading, reduceMotion, cameraDebugOpen])
   const camX = useSpring(camera.x, spring)
   const camY = useSpring(camera.y, spring)
   const camScale = useSpring(camera.scale, spring)
 
   useEffect(() => {
+    // Shared-link boot: snap framing instantly under the veil (no portfolio → play spring).
+    if (sandboxLoading) {
+      camX.jump(camera.x)
+      camY.jump(camera.y)
+      camScale.jump(camera.scale)
+      return
+    }
     camX.set(camera.x)
     camY.set(camera.y)
     camScale.set(camera.scale)
-  }, [camera, camX, camY, camScale])
+  }, [camera, camX, camY, camScale, sandboxLoading])
 
   const boardTransform = useMotionTemplate`translate3d(${camX}px, ${camY}px, 0) scale(${camScale}) rotateX(${sceneTilt}deg) rotateZ(${sceneSpin}deg)`
 
   const select = useCallback((id) => {
+    if (sandboxOpen) return
+    setDeskOpen(false)
     setSelectedId(id)
     setPhase('zooming')
     setHoveredId(null)
@@ -195,9 +284,162 @@ export default function App() {
       setBlogSlug(null)
       writeBlogUrl(undefined)
     }
+  }, [sandboxOpen])
+
+  const enterSandbox = useCallback(() => {
+    if (compact || phase !== 'board') return
+    setSelectedId(null)
+    setHoveredId(null)
+    setSandboxState(createSandboxState())
+    setSandboxTool('stamp')
+    setSandboxPhase('board')
+    setSandboxFocus(null)
+    setSandboxViewOnly(false)
+    setSandboxExpired(false)
+    setSandboxShareMessage('')
+    setSandboxShareError('')
+    setSandboxOpen(true)
+  }, [compact, phase])
+
+  const exitSandbox = useCallback(() => {
+    playLoadGen.current += 1
+    sandboxScatterTimers.current.forEach(clearTimeout)
+    sandboxScatterTimers.current = []
+    setSandboxOpen(false)
+    setSandboxState(resetSandbox())
+    setSandboxTool('stamp')
+    setSandboxPhase('board')
+    setSandboxFocus(null)
+    setSandboxViewOnly(false)
+    setSandboxShareBusy(false)
+    setSandboxShareMessage('')
+    setSandboxShareError('')
+    setSandboxLoading(false)
+    setHoveredId(null)
+    if (parsePlayRoute().kind === 'play') writePlayUrl(undefined, { replace: true })
   }, [])
 
+  const openSharedSandbox = useCallback(async (id, { replace = true } = {}) => {
+    const gen = ++playLoadGen.current
+    setDeskOpen(false)
+    setSelectedId(null)
+    setHoveredId(null)
+    setBlogSlug(null)
+    setPhase('board')
+    setSandboxExpired(false)
+    setSandboxShareMessage('')
+    setSandboxShareError('')
+    setSandboxLoading(true)
+    writePlayUrl(id, { replace })
+
+    try {
+      const result = await loadSandbox(id)
+      if (gen !== playLoadGen.current) return
+      if (result.status !== 'ok') {
+        setSandboxOpen(false)
+        setSandboxViewOnly(false)
+        setSandboxState(resetSandbox())
+        setSandboxExpired(true)
+        return
+      }
+      setSandboxState(result.state)
+      setSandboxTool('stamp')
+      setSandboxPhase('board')
+      setSandboxFocus(null)
+      setSandboxViewOnly(true)
+      setSandboxOpen(true)
+      setSandboxExpired(false)
+    } catch {
+      if (gen !== playLoadGen.current) return
+      setSandboxOpen(false)
+      setSandboxViewOnly(false)
+      setSandboxExpired(true)
+    } finally {
+      if (gen !== playLoadGen.current) return
+      // Let the shared board paint under the veil, then lift it.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (gen === playLoadGen.current) setSandboxLoading(false)
+        })
+      })
+    }
+  }, [])
+
+  const dismissSandboxExpired = useCallback(() => {
+    setSandboxExpired(false)
+    setSandboxLoading(false)
+    writePlayUrl(undefined, { replace: true })
+  }, [])
+
+  const shareSandboxBoard = useCallback(async () => {
+    if (sandboxViewOnly || sandboxShareBusy || sandboxPhase !== 'board') return
+    setSandboxShareBusy(true)
+    setSandboxShareError('')
+    setSandboxShareMessage('')
+    try {
+      const { url } = await saveSandbox(sandboxState)
+      try {
+        await navigator.clipboard.writeText(url)
+        setSandboxShareMessage('Link copied · expires in 1h')
+      } catch {
+        setSandboxShareMessage(url)
+      }
+    } catch (err) {
+      setSandboxShareError(err?.message || 'Could not share this board.')
+    } finally {
+      setSandboxShareBusy(false)
+    }
+  }, [sandboxViewOnly, sandboxShareBusy, sandboxPhase, sandboxState])
+
+  const onSandboxPaintCell = useCallback(
+    (row, col) => {
+      if (sandboxViewOnly || sandboxPhase !== 'board') return
+
+      if (sandboxTool === 'type') {
+        setSandboxState((s) => {
+          if (!s.grid[row][col]) return stampCell(s, row, col)
+          return s
+        })
+        setSandboxFocus({ row, col })
+        return
+      }
+
+      if (sandboxTool === 'erase') {
+        setSandboxState((s) => eraseCell(s, row, col))
+        setSandboxFocus((f) => (f && f.row === row && f.col === col ? null : f))
+        return
+      }
+      if (sandboxTool === 'raise') {
+        setSandboxState((s) => adjustCellHeight(s, row, col, 0.12))
+        setSandboxFocus({ row, col })
+        return
+      }
+      if (sandboxTool === 'lower') {
+        setSandboxState((s) => adjustCellHeight(s, row, col, -0.12))
+        setSandboxFocus({ row, col })
+        return
+      }
+      setSandboxState((s) => stampCell(s, row, col))
+      setSandboxFocus({ row, col })
+    },
+    [sandboxTool, sandboxPhase, sandboxViewOnly],
+  )
+
+  const runSandboxScatter = useCallback(() => {
+    if (sandboxPhase !== 'board' || playScene.pieces.length === 0) return
+    sandboxScatterTimers.current.forEach(clearTimeout)
+    sandboxScatterTimers.current = []
+    setSandboxPhase('zooming')
+    const outMs = reduceMotion ? 200 : 720
+    const backMs = outMs + returnHoldMs(reduceMotion)
+    sandboxScatterTimers.current.push(
+      window.setTimeout(() => setSandboxPhase('returning'), outMs),
+      window.setTimeout(() => setSandboxPhase('board'), backMs),
+    )
+  }, [sandboxPhase, playScene.pieces.length, reduceMotion])
+
   const back = useCallback(() => {
+    if (Date.now() < ignorePanelBackUntil.current) return
     if (phase === 'detail') {
       setBlogSlug(null)
       writeBlogUrl(undefined)
@@ -207,25 +449,117 @@ export default function App() {
 
   const openBlogArticle = useCallback((slug) => {
     setBlogSlug(slug)
-    // Opening an article pushes history; returning to the list replaces so
-    // browser Back leaves Blog instead of re-opening the same post.
     writeBlogUrl(slug, { replace: slug == null })
   }, [])
 
-  // Deep link: /blog or /blog/{slug} (also /#/blog/...)
+  const openDesk = useCallback((view = 'home') => {
+    setDeskView(view)
+    setDeskOpen(true)
+    writeDeskUrl()
+  }, [])
+
+  const closeDesk = useCallback(() => {
+    ignorePanelBackUntil.current = Date.now() + 400
+    setDeskOpen(false)
+    setDeskView('home')
+    const replace = parseBlogRoute().kind === 'write'
+    if (selectedId === 'blog') writeBlogUrl(blogSlug, { replace })
+    else writeBlogUrl(undefined, { replace })
+  }, [selectedId, blogSlug])
+
+  const closeDeskToBoard = useCallback(() => {
+    setDeskOpen(false)
+    setDeskView('home')
+    setBlogSlug(null)
+    writeBlogUrl(undefined, { replace: true })
+    setPhase((current) => (current === 'detail' || current === 'zooming' ? 'exiting' : current))
+  }, [])
+
+  const onPublished = useCallback((slug) => {
+    setDeskOpen(false)
+    setSelectedId('blog')
+    setBlogSlug(slug)
+    setPhase('detail')
+    writeBlogUrl(slug)
+  }, [])
+
+  const onDeletePost = useCallback(async (item) => {
+    const slug = item?.slug
+    if (!slug) return
+    const ok = window.confirm(`Delete “${item.title}”? This cannot be undone.`)
+    if (!ok) return
+    try {
+      await deletePost(slug)
+      if (blogSlug === slug) openBlogArticle(null)
+    } catch (err) {
+      window.alert(err?.message || 'Could not delete that post.')
+    }
+  }, [blogSlug, openBlogArticle])
+
+  useEffect(() => subscribePosts(setLivePosts, () => setLivePosts([])), [])
+  useEffect(() => subscribePages(setLivePages, () => setLivePages({})), [])
+  useEffect(() => subscribeSite(setLiveSite, () => setLiveSite(null)), [])
+
   useEffect(() => {
+    if (!isOwner) return undefined
+    let cancelled = false
+    Promise.all([seedLocalPosts(BLOG_SEED), seedPages()]).catch((err) => {
+      if (!cancelled) console.warn('Could not seed content', err)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isOwner])
+
+  // Deep link: /play/{id}, /blog, /blog/{slug}, /write
+  useEffect(() => {
+    const play = parsePlayRoute()
+    if (play.kind === 'play') {
+      openSharedSandbox(play.id, { replace: true })
+      return
+    }
     const route = parseBlogRoute()
+    if (route.kind === 'write') {
+      setDeskOpen(true)
+      return
+    }
     if (route.kind !== 'blog') return
     setSelectedId('blog')
     setBlogSlug(route.slug)
     setPhase('detail')
-    // Normalize hash forms to a clean path URL.
     writeBlogUrl(route.slug, { replace: true })
-  }, [])
+  }, [openSharedSandbox])
 
   useEffect(() => {
     const onPopState = () => {
+      const play = parsePlayRoute()
+      if (play.kind === 'play') {
+        openSharedSandbox(play.id, { replace: true })
+        return
+      }
+      if (sandboxOpen || sandboxLoading) {
+        playLoadGen.current += 1
+        sandboxScatterTimers.current.forEach(clearTimeout)
+        sandboxScatterTimers.current = []
+        setSandboxOpen(false)
+        setSandboxState(resetSandbox())
+        setSandboxTool('stamp')
+        setSandboxPhase('board')
+        setSandboxFocus(null)
+        setSandboxViewOnly(false)
+        setSandboxShareMessage('')
+        setSandboxShareError('')
+        setSandboxLoading(false)
+        setHoveredId(null)
+      }
+      setSandboxExpired(false)
+
       const route = parseBlogRoute()
+      if (route.kind === 'write') {
+        setDeskOpen(true)
+        return
+      }
+      setDeskOpen(false)
       if (route.kind === 'blog') {
         setSelectedId('blog')
         setBlogSlug(route.slug)
@@ -241,7 +575,11 @@ export default function App() {
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
-  }, [])
+  }, [openSharedSandbox, sandboxOpen, sandboxLoading])
+
+  useEffect(() => {
+    if (compact && sandboxOpen && !sandboxViewOnly) exitSandbox()
+  }, [compact, sandboxOpen, sandboxViewOnly, exitSandbox])
 
   useEffect(() => {
     if (phase !== 'board') {
@@ -282,9 +620,43 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
+      if (e.key === 'Escape' && deskOpen) {
+        closeDesk()
+        return
+      }
+      if (e.key === 'Escape' && sandboxOpen) {
+        if (sandboxFocus) {
+          setSandboxFocus(null)
+          return
+        }
+        exitSandbox()
+        return
+      }
+      if (
+        sandboxOpen &&
+        !sandboxViewOnly &&
+        sandboxPhase === 'board' &&
+        sandboxFocus &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        e.key.length === 1 &&
+        /[a-zA-Z0-9]/.test(e.key)
+      ) {
+        e.preventDefault()
+        const { row, col } = sandboxFocus
+        setSandboxState((s) => setCellChar(s, row, col, e.key))
+        return
+      }
       if (e.key === 'Escape' && (phase === 'detail' || phase === 'exiting')) back()
-      if (e.key === '?' && phase === 'board' && !cameraDebugOpen) select('legend')
-      if ((e.key === 'c' || e.key === 'C') && phase === 'board' && !e.metaKey && !e.ctrlKey) {
+      if (e.key === '?' && phase === 'board' && !cameraDebugOpen && !sandboxOpen) select('legend')
+      if (
+        (e.key === 'c' || e.key === 'C') &&
+        phase === 'board' &&
+        !sandboxOpen &&
+        !e.metaKey &&
+        !e.ctrlKey
+      ) {
         setCameraDebugOpen((open) => {
           if (open) setCameraDebugPanelVisible(true)
           return !open
@@ -302,7 +674,20 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, phase, back, select, cameraDebugOpen])
+  }, [
+    selectedId,
+    phase,
+    back,
+    select,
+    cameraDebugOpen,
+    deskOpen,
+    closeDesk,
+    sandboxOpen,
+    sandboxPhase,
+    sandboxFocus,
+    sandboxViewOnly,
+    exitSandbox,
+  ])
 
   const accent = focus ?? hovered
   const bgAccent = sceneTransitioning ? frozenAccentRef.current : accent
@@ -348,48 +733,125 @@ export default function App() {
             willChange: sceneTransitioning ? 'transform' : 'auto',
           }}
         >
-          {scene.pieces.map((piece) => (
-            <Piece
-              key={piece.id}
-              piece={piece}
-              phase={phase}
-              isSelected={piece.id === selectedId}
-              isHovered={piece.id === hoveredId}
-              onSelect={select}
+          {sandboxOpen ? (
+            <SandboxBoard
+              scene={playScene}
+              phase={sandboxPhase}
+              tool={sandboxTool}
+              hoveredId={hoveredId}
+              focusedCell={sandboxViewOnly ? null : sandboxFocus}
               onHover={setHoveredId}
-              allowFloat={floatReady}
+              onPaintCell={onSandboxPaintCell}
               reduceMotion={reduceMotion}
+              viewOnly={sandboxViewOnly}
             />
-          ))}
-          {showGrid && (
-            <motion.div
-              className="absolute inset-0"
-              style={{ transformStyle: 'preserve-3d' }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-            >
-              <DraftingGrid layout={scene} light={compact} />
-            </motion.div>
+          ) : suppressHomeBoard ? null : (
+            <>
+              {scene.pieces.map((piece) => (
+                <Piece
+                  key={piece.id}
+                  piece={piece}
+                  phase={phase}
+                  isSelected={piece.id === selectedId}
+                  isHovered={piece.id === hoveredId}
+                  onSelect={select}
+                  onHover={setHoveredId}
+                  allowFloat={floatReady}
+                  reduceMotion={reduceMotion}
+                />
+              ))}
+              {showGrid && (
+                <motion.div
+                  className="absolute inset-0"
+                  style={{ transformStyle: 'preserve-3d' }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                >
+                  <DraftingGrid layout={scene} light={compact} />
+                </motion.div>
+              )}
+              {scene.margins.map((zone) => (
+                <MarginZone
+                  key={zone.id}
+                  zone={zone}
+                  phase={phase}
+                  isSelected={zone.id === selectedId}
+                  isHovered={zone.id === hoveredId}
+                  onSelect={select}
+                  onHover={setHoveredId}
+                />
+              ))}
+              <BoardCredit
+                visible={onBoard || phase === 'returning'}
+                layout={scene}
+                compact={compact}
+                owner={owner}
+              />
+              <SandboxEntry
+                entry={portfolioScene.sandboxEntry}
+                visible={onBoard && !compact && !deskOpen}
+                onEnter={enterSandbox}
+              />
+            </>
           )}
-          {scene.margins.map((zone) => (
-            <MarginZone
-              key={zone.id}
-              zone={zone}
-              phase={phase}
-              isSelected={zone.id === selectedId}
-              isHovered={zone.id === hoveredId}
-              onSelect={select}
-              onHover={setHoveredId}
-            />
-          ))}
-          <BoardCredit
-            visible={onBoard || phase === 'returning'}
-            layout={scene}
-            compact={compact}
-          />
         </motion.div>
       </div>
+
+      {sandboxOpen && (
+        <SandboxTray
+          tool={sandboxTool}
+          color={sandboxState.activeColor}
+          onExit={exitSandbox}
+          onTool={setSandboxTool}
+          onColor={(c) => setSandboxState((s) => setSandboxColor(s, c))}
+          onNewPiece={() => setSandboxState((s) => startNewPiece(s))}
+          onScatter={runSandboxScatter}
+          onReset={() => {
+            setSandboxState(resetSandbox())
+            setSandboxTool('stamp')
+            setSandboxPhase('board')
+            setSandboxFocus(null)
+            setSandboxShareMessage('')
+            setSandboxShareError('')
+          }}
+          onShare={shareSandboxBoard}
+          shareBusy={sandboxShareBusy}
+          shareMessage={sandboxShareMessage}
+          shareError={sandboxShareError}
+          scatterBusy={sandboxPhase !== 'board'}
+          viewOnly={sandboxViewOnly}
+        />
+      )}
+
+      <AnimatePresence>
+        {sandboxLoading && (
+          <motion.div
+            key="sandbox-loading"
+            className="absolute inset-0 z-40 flex items-center justify-center p-6"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0.12 : 0.45, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-paper/92">
+              <div className="paper-grid absolute inset-0 opacity-50" />
+              <div className="paper-grain absolute inset-0" />
+            </div>
+            <motion.div
+              className="relative text-center"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div className="text-[10px] uppercase tracking-[0.22em] text-ink/40">Sandbox</div>
+              <p className="mt-2 text-sm text-ink/55">Opening shared board…</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {sandboxExpired && !sandboxLoading && <SandboxExpired onHome={dismissSandboxExpired} />}
 
       <motion.footer
         className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:gap-2 sm:p-10"
@@ -458,25 +920,58 @@ export default function App() {
         </div>
       </motion.footer>
 
-      {showDetail && focus?.kind === 'piece' && focus.tier === 'detail' && (
+      {showDetail && focusedPiece?.kind === 'piece' && focusedPiece.tier === 'detail' && (
         <DetailPanel
-          key={focus.id}
-          piece={focus}
+          key={focusedPiece.id}
+          piece={focusedPiece}
           onBack={back}
           exiting={panelExiting}
-          openSlug={focus.id === 'blog' ? blogSlug : null}
-          onOpenSlug={focus.id === 'blog' ? openBlogArticle : undefined}
+          openSlug={focusedPiece.id === 'blog' ? blogSlug : null}
+          onOpenSlug={focusedPiece.id === 'blog' ? openBlogArticle : undefined}
+          canWrite={focusedPiece.id === 'blog' && isOwner}
+          onCompose={focusedPiece.id === 'blog' ? () => openDesk('post') : undefined}
+          onDeletePost={focusedPiece.id === 'blog' && isOwner ? onDeletePost : undefined}
+          canEdit={isOwner}
+          onEdit={() => openDesk(focusedPiece.id)}
         />
       )}
-      {showDetail && focus?.kind === 'piece' && focus.tier === 'compact' && (
-        <CompactPanel key={focus.id} piece={focus} onBack={back} exiting={panelExiting} />
+      {showDetail && focusedPiece?.kind === 'piece' && focusedPiece.tier === 'compact' && (
+        <CompactPanel
+          key={focusedPiece.id}
+          piece={focusedPiece}
+          onBack={back}
+          exiting={panelExiting}
+          canEdit={isOwner}
+          onEdit={() => openDesk(focusedPiece.id)}
+        />
       )}
-      {showDetail && focus?.kind === 'piece' && focus.tier === 'dock' && (
-        <DockPanel key={focus.id} piece={focus} onBack={back} exiting={panelExiting} />
+      {showDetail && focusedPiece?.kind === 'piece' && focusedPiece.tier === 'dock' && (
+        <DockPanel
+          key={focusedPiece.id}
+          piece={focusedPiece}
+          onBack={back}
+          exiting={panelExiting}
+          canEdit={isOwner}
+          onEdit={() => openDesk(focusedPiece.id)}
+        />
       )}
       {showDetail && focus?.kind === 'margin' && (
         <MarginPanel key={focus.id} zone={focus} onBack={back} exiting={panelExiting} />
       )}
+
+      <AnimatePresence>
+        {deskOpen ? (
+          <WriteDesk
+            key="write-desk"
+            onClose={closeDesk}
+            onBackToBoard={closeDeskToBoard}
+            onPublished={onPublished}
+            initialView={deskView}
+            livePages={livePages}
+            liveSite={liveSite}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <CameraDebug
         active={cameraDebugOpen && onBoard}

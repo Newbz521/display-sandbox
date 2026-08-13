@@ -188,12 +188,12 @@ export default function MarginPanel({ zone, onBack, exiting = false }) {
       <button
         type="button"
         aria-label="Close"
-        className="absolute inset-0 bg-ink/10 backdrop-blur-[2px]"
+        className="absolute inset-0 z-0 bg-ink/10 backdrop-blur-[2px]"
         onClick={onBack}
       />
 
       <motion.div
-        className="detail-scroll relative flex max-h-[min(88vh,760px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-ink/12 bg-card shadow-[0_24px_60px_rgba(29,41,81,0.14)]"
+        className="detail-scroll relative z-10 flex max-h-[min(88vh,760px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-ink/12 bg-card shadow-[0_24px_60px_rgba(29,41,81,0.14)]"
         initial={{ opacity: 0, y: 28, scale: 0.97 }}
         animate={{ opacity: exiting ? 0 : 1, y: exiting ? 20 : 0, scale: exiting ? 0.98 : 1 }}
         exit={{ opacity: 0, y: 16, scale: 0.98, transition: { duration: 0.28 } }}

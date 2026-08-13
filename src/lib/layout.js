@@ -38,8 +38,8 @@ export const THICKNESS = BAR_MAX
 
 /** A series value in 0–1 → a bar height in world units. */
 export function barHeight(value) {
-  const v = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5
-  return BAR_MIN + v * (BAR_MAX - BAR_MIN)
+    const v = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5
+    return BAR_MIN + v * (BAR_MAX - BAR_MIN)
 }
 
 /**
@@ -88,163 +88,191 @@ export const MOBILE_STAMP_CLEARANCE = 156
 const rad = (d) => (d * Math.PI) / 180
 
 function bounds(cells) {
-  const rows = cells.map((c) => c[0])
-  const cols = cells.map((c) => c[1])
-  return {
-    minRow: Math.min(...rows),
-    maxRow: Math.max(...rows),
-    minCol: Math.min(...cols),
-    maxCol: Math.max(...cols),
-  }
+    const rows = cells.map((c) => c[0])
+    const cols = cells.map((c) => c[1])
+    return {
+        minRow: Math.min(...rows),
+        maxRow: Math.max(...rows),
+        minCol: Math.min(...cols),
+        maxCol: Math.max(...cols),
+    }
 }
 
 /**
  * Derive the whole scene from the `cells` arrays once, at module load.
  */
 function build() {
-  const all = PIECES.flatMap((p) => p.cells)
-  const board = bounds(all)
-  const boardCenterX = ((board.minCol + board.maxCol + 1) / 2) * CELL
-  const boardCenterY = ((board.minRow + board.maxRow + 1) / 2) * CELL
+    const all = PIECES.flatMap((p) => p.cells)
+    const board = bounds(all)
+    const boardCenterX = ((board.minCol + board.maxCol + 1) / 2) * CELL
+    const boardCenterY = ((board.minRow + board.maxRow + 1) / 2) * CELL
 
-  const raw = PIECES.map((piece, index) => {
-    const b = bounds(piece.cells)
-    const width = (b.maxCol - b.minCol + 1) * CELL
-    const height = (b.maxRow - b.minRow + 1) * CELL
+    const raw = PIECES.map((piece, index) => {
+        const b = bounds(piece.cells)
+        const width = (b.maxCol - b.minCol + 1) * CELL
+        const height = (b.maxRow - b.minRow + 1) * CELL
 
-    // A piece has exactly as many blocks as its code has letters, so the word
-    // sets into the shape one letter per block, in row-major reading order —
-    // and the `series` value at that same index sets how tall the bar stands.
-    const blocks = [...piece.cells]
-      .sort((p, q) => p[0] - q[0] || p[1] - q[1])
-      .map(([r, c], i) => ({
-        x: (c - b.minCol) * CELL,
-        y: (r - b.minRow) * CELL,
-        char: (piece.short ?? '')[i] ?? '',
-        value: piece.series?.[i] ?? 0.5,
-        h: barHeight(piece.series?.[i]),
-      }))
+        // A piece has exactly as many blocks as its code has letters, so the word
+        // sets into the shape one letter per block, in row-major reading order —
+        // and the `series` value at that same index sets how tall the bar stands.
+        const blocks = [...piece.cells]
+            .sort((p, q) => p[0] - q[0] || p[1] - q[1])
+            .map(([r, c], i) => ({
+                x: (c - b.minCol) * CELL,
+                y: (r - b.minRow) * CELL,
+                char: (piece.short ?? '')[i] ?? '',
+                value: piece.series?.[i] ?? 0.5,
+                h: barHeight(piece.series?.[i]),
+            }))
 
-    const tightX = b.minCol * CELL
-    const tightY = b.minRow * CELL
-    const dx = tightX + width / 2 - boardCenterX
-    const dy = tightY + height / 2 - boardCenterY
-    const dist = Math.hypot(dx, dy) || 1
+        const tightX = b.minCol * CELL
+        const tightY = b.minRow * CELL
+        const dx = tightX + width / 2 - boardCenterX
+        const dy = tightY + height / 2 - boardCenterY
+        const dist = Math.hypot(dx, dy) || 1
+
+        return {
+            ...piece,
+            index,
+            blocks,
+            width,
+            height,
+            x: tightX + dx * SPREAD + (dx / dist) * SPREAD_FIXED,
+            y: tightY + dy * SPREAD + (dy / dist) * SPREAD_FIXED,
+            dir: { x: dx / dist, y: dy / dist },
+            dist,
+        }
+    })
+
+    // Normalise so the composition starts at (0, 0). The margin doubles as the
+    // slab's border, since the slab fills the world rect.
+    const margin = CELL * 0.78
+    const minX = Math.min(...raw.map((p) => p.x)) - margin
+    const minY = Math.min(...raw.map((p) => p.y)) - margin
+    const maxX = Math.max(...raw.map((p) => p.x + p.width)) + margin
+    const maxY = Math.max(...raw.map((p) => p.y + p.height)) + margin
+
+    const pieces = raw.map((p) => ({...p, x: p.x - minX, y: p.y - minY }))
+
+    const pMaxX = Math.max(...pieces.map((p) => p.x + p.width))
+    const pMaxY = Math.max(...pieces.map((p) => p.y + p.height))
+    const pMidY = (Math.min(...pieces.map((p) => p.y)) + pMaxY) / 2
+
+    const marginDefs = {
+        now: { x: -200, y: 48, width: 212, height: 224 },
+        notes: { x: -218, y: pMidY - 130, width: 228, height: 340 },
+        legend: { x: pMaxX + 36, y: 36, width: 224, height: 204 },
+        detail: { x: pMaxX + 36, y: pMidY - 100, width: 284, height: 304 },
+        colophon: { x: pMaxX - 64, y: pMaxY + 32, width: 304, height: 184 },
+    }
+
+    const margins = MARGINS.map((m) => ({
+        ...m,
+        ...marginDefs[m.id],
+    }))
+
+    const pad = CELL * 0.42
+    const globalMinX = Math.min(0, ...margins.map((m) => m.x)) - pad
+    const globalMinY = Math.min(0, ...margins.map((m) => m.y)) - pad
+    const globalMaxX = Math.max(pMaxX, ...margins.map((m) => m.x + m.width)) + pad
+    const globalMaxY = Math.max(pMaxY, ...margins.map((m) => m.y + m.height)) + pad
+
+    const shiftX = -globalMinX
+    const shiftY = -globalMinY
+
+    const shiftedMargins = margins.map((m) => ({...m, x: m.x + shiftX, y: m.y + shiftY }))
+    const shiftedPieces = pieces.map((p) => ({...p, x: p.x + shiftX, y: p.y + shiftY }))
+
+    const worldWidth = globalMaxX + shiftX
+    let worldHeight = globalMaxY + shiftY
+
+    const notesSheet = shiftedMargins.find((m) => m.id === 'notes')
+    const titleBlock = shiftedMargins.find((m) => m.id === 'colophon')
+    const sandboxW = CELL * 2.35
+    const sandboxH = CELL * 1.3
+    const sandboxX = notesSheet
+        ? notesSheet.x + (notesSheet.width - sandboxW) / 2
+        : Math.min(...shiftedPieces.map((p) => p.x))
+    // Keep under Notes horizontally; match the title block's vertical band.
+    const sandboxY = titleBlock
+        ? titleBlock.y + (titleBlock.height - sandboxH) / 2
+        : Math.max(...shiftedPieces.map((p) => p.y + p.height)) + 24
+
+    // Keep the toolkit inside the framed world.
+    worldHeight = Math.max(worldHeight, sandboxY + sandboxH + pad)
 
     return {
-      ...piece,
-      index,
-      blocks,
-      width,
-      height,
-      x: tightX + dx * SPREAD + (dx / dist) * SPREAD_FIXED,
-      y: tightY + dy * SPREAD + (dy / dist) * SPREAD_FIXED,
-      dir: { x: dx / dist, y: dy / dist },
-      dist,
+        pieces: shiftedPieces,
+        margins: shiftedMargins,
+        world: { width: worldWidth, height: worldHeight },
+        credit: {
+            x: worldWidth / 2,
+            y: pMaxY + shiftY + 68,
+        },
+        sandboxEntry: {
+            x: sandboxX,
+            y: sandboxY,
+            width: sandboxW,
+            height: sandboxH,
+        },
     }
-  })
-
-  // Normalise so the composition starts at (0, 0). The margin doubles as the
-  // slab's border, since the slab fills the world rect.
-  const margin = CELL * 0.78
-  const minX = Math.min(...raw.map((p) => p.x)) - margin
-  const minY = Math.min(...raw.map((p) => p.y)) - margin
-  const maxX = Math.max(...raw.map((p) => p.x + p.width)) + margin
-  const maxY = Math.max(...raw.map((p) => p.y + p.height)) + margin
-
-  const pieces = raw.map((p) => ({ ...p, x: p.x - minX, y: p.y - minY }))
-
-  const pMaxX = Math.max(...pieces.map((p) => p.x + p.width))
-  const pMaxY = Math.max(...pieces.map((p) => p.y + p.height))
-  const pMidY = (Math.min(...pieces.map((p) => p.y)) + pMaxY) / 2
-
-  const marginDefs = {
-    now: { x: -200, y: 48, width: 212, height: 224 },
-    notes: { x: -218, y: pMidY - 130, width: 228, height: 340 },
-    legend: { x: pMaxX + 36, y: 36, width: 224, height: 204 },
-    detail: { x: pMaxX + 36, y: pMidY - 100, width: 284, height: 304 },
-    colophon: { x: pMaxX - 64, y: pMaxY + 32, width: 304, height: 184 },
-  }
-
-  const margins = MARGINS.map((m) => ({
-    ...m,
-    ...marginDefs[m.id],
-  }))
-
-  const pad = CELL * 0.42
-  const globalMinX = Math.min(0, ...margins.map((m) => m.x)) - pad
-  const globalMinY = Math.min(0, ...margins.map((m) => m.y)) - pad
-  const globalMaxX = Math.max(pMaxX, ...margins.map((m) => m.x + m.width)) + pad
-  const globalMaxY = Math.max(pMaxY, ...margins.map((m) => m.y + m.height)) + pad
-
-  const shiftX = -globalMinX
-  const shiftY = -globalMinY
-
-  const shiftedMargins = margins.map((m) => ({ ...m, x: m.x + shiftX, y: m.y + shiftY }))
-  const shiftedPieces = pieces.map((p) => ({ ...p, x: p.x + shiftX, y: p.y + shiftY }))
-
-  const worldWidth = globalMaxX + shiftX
-  const worldHeight = globalMaxY + shiftY
-
-  return {
-    pieces: shiftedPieces,
-    margins: shiftedMargins,
-    world: { width: worldWidth, height: worldHeight },
-    credit: {
-      x: worldWidth / 2,
-      y: pMaxY + shiftY + 68,
-    },
-  }
 }
 
 function buildMobile(desktop) {
-  const pieces = desktop.pieces
-  const pMinX = Math.min(...pieces.map((p) => p.x))
-  const pMaxX = Math.max(...pieces.map((p) => p.x + p.width))
-  const pMaxY = Math.max(...pieces.map((p) => p.y + p.height))
-  const centerX = (pMinX + pMaxX) / 2
-  const contentW = pMaxX - pMinX
-  const gap = 14
+    const pieces = desktop.pieces
+    const pMinX = Math.min(...pieces.map((p) => p.x))
+    const pMaxX = Math.max(...pieces.map((p) => p.x + p.width))
+    const pMaxY = Math.max(...pieces.map((p) => p.y + p.height))
+    const centerX = (pMinX + pMaxX) / 2
+    const contentW = pMaxX - pMinX
+    const gap = 14
 
-  let y = pMaxY + 28
-  const creditY = y
-  y += MOBILE_STAMP_CLEARANCE
+    let y = pMaxY + 28
+    const creditY = y
+    y += MOBILE_STAMP_CLEARANCE
 
-  const colW = (contentW - gap) / 2
-  const marginDefs = {
-    now: { x: pMinX, y, width: colW, height: 162 },
-    notes: { x: pMinX + colW + gap, y, width: colW, height: 162 },
-  }
-  y += 162 + gap
-  marginDefs.legend = { x: pMinX, y, width: colW, height: 148 }
-  marginDefs.detail = { x: pMinX + colW + gap, y, width: colW, height: 148 }
-  y += 148 + gap
-  marginDefs.colophon = { x: pMinX, y, width: contentW, height: 140 }
-  y += 140
+    const colW = (contentW - gap) / 2
+    const marginDefs = {
+        now: { x: pMinX, y, width: colW, height: 162 },
+        notes: { x: pMinX + colW + gap, y, width: colW, height: 162 },
+    }
+    y += 162 + gap
+    marginDefs.legend = { x: pMinX, y, width: colW, height: 148 }
+    marginDefs.detail = { x: pMinX + colW + gap, y, width: colW, height: 148 }
+    y += 148 + gap
+    marginDefs.colophon = { x: pMinX, y, width: contentW, height: 140 }
+    y += 140
 
-  const margins = MARGINS.map((m) => ({ ...m, ...marginDefs[m.id] }))
-  const credit = { x: centerX, y: creditY }
+    const margins = MARGINS.map((m) => ({...m, ...marginDefs[m.id] }))
+    const credit = { x: centerX, y: creditY }
 
-  const contentMinX = pMinX
-  const contentMaxX = Math.max(pMaxX, ...margins.map((m) => m.x + m.width))
-  const contentMinY = Math.min(...pieces.map((p) => p.y))
-  const contentMaxY = Math.max(y, credit.y + MOBILE_STAMP_CLEARANCE)
-  const contentWidth = contentMaxX - contentMinX
-  const contentHeight = contentMaxY - contentMinY
+    const contentMinX = pMinX
+    const contentMaxX = Math.max(pMaxX, ...margins.map((m) => m.x + m.width))
+    const contentMinY = Math.min(...pieces.map((p) => p.y))
+    const contentMaxY = Math.max(y, credit.y + MOBILE_STAMP_CLEARANCE)
+    const contentWidth = contentMaxX - contentMinX
+    const contentHeight = contentMaxY - contentMinY
 
-  const pad = CELL * 0.32
-  const worldW = contentWidth + pad * 2
-  const worldH = contentHeight + pad * 2
-  const shiftX = (worldW - contentWidth) / 2 - contentMinX
-  const shiftY = (worldH - contentHeight) / 2 - contentMinY
-  const nudge = (item) => ({ ...item, x: item.x + shiftX, y: item.y + shiftY })
+    const pad = CELL * 0.32
+    const worldW = contentWidth + pad * 2
+    const worldH = contentHeight + pad * 2
+    const shiftX = (worldW - contentWidth) / 2 - contentMinX
+    const shiftY = (worldH - contentHeight) / 2 - contentMinY
+    const nudge = (item) => ({...item, x: item.x + shiftX, y: item.y + shiftY })
 
-  return {
-    pieces: pieces.map(nudge),
-    margins: margins.map(nudge),
-    credit: { x: credit.x + shiftX, y: credit.y + shiftY },
-    world: { width: worldW, height: worldH },
-  }
+    return {
+        pieces: pieces.map(nudge),
+        margins: margins.map(nudge),
+        credit: { x: credit.x + shiftX, y: credit.y + shiftY },
+        world: { width: worldW, height: worldH },
+        sandboxEntry: desktop.sandboxEntry
+            ? {
+                  ...desktop.sandboxEntry,
+                  x: desktop.sandboxEntry.x + shiftX,
+                  y: desktop.sandboxEntry.y + shiftY,
+              }
+            : null,
+    }
 }
 
 export const LAYOUT = build()
@@ -252,23 +280,23 @@ export const LAYOUT_MOBILE = buildMobile(LAYOUT)
 
 /** Tight framing rect for the mobile board — pieces, stamp, and sheets. */
 export function mobileBoardFocus(layout) {
-  const pad = 8
-  const minX = Math.min(...layout.pieces.map((p) => p.x), ...layout.margins.map((m) => m.x))
-  const maxX = Math.max(
-    ...layout.pieces.map((p) => p.x + p.width),
-    ...layout.margins.map((m) => m.x + m.width),
-  )
-  const minY = Math.min(...layout.pieces.map((p) => p.y))
-  const maxY = Math.max(
-    ...layout.margins.map((m) => m.y + m.height),
-    layout.credit.y + MOBILE_STAMP_CLEARANCE,
-  )
-  return {
-    x: Math.max(0, minX - pad),
-    y: Math.max(0, minY - pad),
-    width: maxX - minX + pad * 2,
-    height: maxY - minY + pad * 2,
-  }
+    const pad = 8
+    const minX = Math.min(...layout.pieces.map((p) => p.x), ...layout.margins.map((m) => m.x))
+    const maxX = Math.max(
+        ...layout.pieces.map((p) => p.x + p.width),
+        ...layout.margins.map((m) => m.x + m.width),
+    )
+    const minY = Math.min(...layout.pieces.map((p) => p.y))
+    const maxY = Math.max(
+        ...layout.margins.map((m) => m.y + m.height),
+        layout.credit.y + MOBILE_STAMP_CLEARANCE,
+    )
+    return {
+        x: Math.max(0, minX - pad),
+        y: Math.max(0, minY - pad),
+        width: maxX - minX + pad * 2,
+        height: maxY - minY + pad * 2,
+    }
 }
 
 /**
@@ -278,13 +306,13 @@ export function mobileBoardFocus(layout) {
  * `z` is height above the board, toward the viewer.
  */
 function rotate({ x, y, z = 0 }, tiltX = TILT_X, spinZ = SPIN_Z) {
-  const cz = Math.cos(rad(spinZ))
-  const sz = Math.sin(rad(spinZ))
-  const cx = Math.cos(rad(tiltX))
-  const sx = Math.sin(rad(tiltX))
-  const sx1 = x * cz - y * sz
-  const sy1 = x * sz + y * cz
-  return { x: sx1, y: sy1 * cx - z * sx, z: sy1 * sx + z * cx }
+    const cz = Math.cos(rad(spinZ))
+    const sz = Math.sin(rad(spinZ))
+    const cx = Math.cos(rad(tiltX))
+    const sx = Math.sin(rad(tiltX))
+    const sx1 = x * cz - y * sz
+    const sy1 = x * sz + y * cz
+    return { x: sx1, y: sy1 * cx - z * sx, z: sy1 * sx + z * cx }
 }
 
 /**
@@ -302,67 +330,65 @@ function rotate({ x, y, z = 0 }, tiltX = TILT_X, spinZ = SPIN_Z) {
  * few rounds of refinement rather than in closed form.
  */
 export function cameraFor(
-  focus,
-  vw,
-  vh,
-  {
-    padding = 0.82,
-    maxScale = 12,
-    zRange = [0, THICKNESS],
-    layout = LAYOUT,
-    tiltX = TILT_X,
-    spinZ = SPIN_Z,
-    viewOffsetY = 0,
-    scaleMultiplier = 1,
-  } = {},
+    focus,
+    vw,
+    vh, {
+        padding = 0.82,
+        maxScale = 12,
+        zRange = [0, THICKNESS],
+        layout = LAYOUT,
+        tiltX = TILT_X,
+        spinZ = SPIN_Z,
+        viewOffsetY = 0,
+        scaleMultiplier = 1,
+    } = {},
 ) {
-  const cx = layout.world.width / 2
-  const cy = layout.world.height / 2
+    const cx = layout.world.width / 2
+    const cy = layout.world.height / 2
 
-  // The z range matters as much as the footprint: the slab hangs below z = 0 and
-  // the blocks stand above it, and under a tilt both project onto the screen.
-  const corners = []
-  for (const x of [focus.x, focus.x + focus.width]) {
-    for (const y of [focus.y, focus.y + focus.height]) {
-      for (const z of zRange) {
-        corners.push(rotate({ x: x - cx, y: y - cy, z }, tiltX, spinZ))
-      }
+    // The z range matters as much as the footprint: the slab hangs below z = 0 and
+    // the blocks stand above it, and under a tilt both project onto the screen.
+    const corners = []
+    for (const x of[focus.x, focus.x + focus.width]) {
+        for (const y of[focus.y, focus.y + focus.height]) {
+            for (const z of zRange) {
+                corners.push(rotate({ x: x - cx, y: y - cy, z }, tiltX, spinZ))
+            }
+        }
     }
-  }
-  const center = rotate(
-    {
-      x: focus.x + focus.width / 2 - cx,
-      y: focus.y + focus.height / 2 - cy,
-      z: THICKNESS / 2,
-    },
-    tiltX,
-    spinZ,
-  )
+    const center = rotate({
+            x: focus.x + focus.width / 2 - cx,
+            y: focus.y + focus.height / 2 - cy,
+            z: THICKNESS / 2,
+        },
+        tiltX,
+        spinZ,
+    )
 
-  let scale = 1
-  for (let pass = 0; pass < 5; pass++) {
-    const tx = -scale * center.x
-    const ty = -scale * center.y
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const c of corners) {
-      const depth = SCENE_DEPTH / Math.max(SCENE_DEPTH - c.z, 1)
-      const px = (scale * c.x + tx) * depth
-      const py = (scale * c.y + ty) * depth
-      if (px < minX) minX = px
-      if (px > maxX) maxX = px
-      if (py < minY) minY = py
-      if (py > maxY) maxY = py
+    let scale = 1
+    for (let pass = 0; pass < 5; pass++) {
+        const tx = -scale * center.x
+        const ty = -scale * center.y
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+        for (const c of corners) {
+            const depth = SCENE_DEPTH / Math.max(SCENE_DEPTH - c.z, 1)
+            const px = (scale * c.x + tx) * depth
+            const py = (scale * c.y + ty) * depth
+            if (px < minX) minX = px
+            if (px > maxX) maxX = px
+            if (py < minY) minY = py
+            if (py > maxY) maxY = py
+        }
+        const correction = Math.min((vw * padding) / (maxX - minX), (vh * padding) / (maxY - minY))
+        scale = Math.min(scale * correction, maxScale)
     }
-    const correction = Math.min((vw * padding) / (maxX - minX), (vh * padding) / (maxY - minY))
-    scale = Math.min(scale * correction, maxScale)
-  }
 
-  return {
-    scale: scale * scaleMultiplier,
-    x: -scale * scaleMultiplier * center.x,
-    y: -scale * scaleMultiplier * center.y + viewOffsetY,
-  }
+    return {
+        scale: scale * scaleMultiplier,
+        x: -scale * scaleMultiplier * center.x,
+        y: -scale * scaleMultiplier * center.y + viewOffsetY,
+    }
 }

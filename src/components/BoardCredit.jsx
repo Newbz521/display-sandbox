@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { CREDIT_Z } from '../lib/layout'
 import { OWNER } from '../data/portfolio'
 
-export default function BoardCredit({ visible, layout, compact = false }) {
+export default function BoardCredit({ visible, layout, compact = false, owner = OWNER }) {
   const { x, y } = layout.credit
 
   return (
@@ -29,13 +29,13 @@ export default function BoardCredit({ visible, layout, compact = false }) {
           Drawn by
         </div>
         <div className="mt-2 text-4xl font-bold tracking-tight text-ink sm:mt-2 sm:text-4xl">
-          {OWNER.name}
+          {owner.name}
         </div>
         <div className="mt-1.5 text-xl font-semibold text-ink/82 sm:mt-1.5 sm:text-xl">
-          {OWNER.role}
+          {owner.role}
         </div>
         {!compact ? (
-          <div className="mt-3 text-lg leading-relaxed text-ink/68">{OWNER.tagline}</div>
+          <div className="mt-3 text-lg leading-relaxed text-ink/68">{owner.tagline}</div>
         ) : null}
       </div>
     </motion.div>

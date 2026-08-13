@@ -1,8 +1,15 @@
 import { motion } from 'framer-motion'
 import BackButton from './detail/BackButton'
+import EditButton from './detail/EditButton'
 import { PieceContent } from './detail/Content'
 
-export default function CompactPanel({ piece, onBack, exiting = false }) {
+export default function CompactPanel({
+  piece,
+  onBack,
+  exiting = false,
+  canEdit = false,
+  onEdit,
+}) {
   return (
     <motion.div
       className={`absolute inset-0 z-30 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8${exiting ? ' pointer-events-none' : ''}`}
@@ -14,19 +21,20 @@ export default function CompactPanel({ piece, onBack, exiting = false }) {
       <button
         type="button"
         aria-label="Close"
-        className="absolute inset-0 bg-ink/12 backdrop-blur-[2px]"
+        className="absolute inset-0 z-0 bg-ink/12 backdrop-blur-[2px]"
         onClick={onBack}
       />
 
       <motion.div
-        className="detail-scroll relative flex max-h-[min(88vh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-ink/12 bg-card shadow-[0_24px_60px_rgba(29,41,81,0.14)]"
+        className="detail-scroll relative z-10 flex max-h-[min(88vh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-ink/12 bg-card shadow-[0_24px_60px_rgba(29,41,81,0.14)]"
         initial={{ opacity: 0, y: 28, scale: 0.97 }}
         animate={{ opacity: exiting ? 0 : 1, y: exiting ? 20 : 0, scale: exiting ? 0.98 : 1 }}
         exit={{ opacity: 0, y: 16, scale: 0.98, transition: { duration: 0.28 } }}
         transition={{ type: 'spring', stiffness: 240, damping: 28 }}
       >
-        <div className="shrink-0 border-b border-ink/8 px-5 py-4">
+        <div className="flex items-center gap-3 shrink-0 border-b border-ink/8 px-5 py-4">
           <BackButton color={piece.color} onBack={onBack} compact />
+          {canEdit ? <EditButton color={piece.color} onEdit={onEdit} className="ml-auto" /> : null}
         </div>
 
         <div className="overflow-y-auto px-5 py-6 sm:px-6">

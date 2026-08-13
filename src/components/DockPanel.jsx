@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import BackButton from './detail/BackButton'
+import EditButton from './detail/EditButton'
 
 function DockLink({ item, color }) {
   const linked = Boolean(item.link) && item.link !== '#'
@@ -44,7 +45,13 @@ function DockLink({ item, color }) {
   )
 }
 
-export default function DockPanel({ piece, onBack, exiting = false }) {
+export default function DockPanel({
+  piece,
+  onBack,
+  exiting = false,
+  canEdit = false,
+  onEdit,
+}) {
   const items = piece.content.items ?? []
 
   return (
@@ -58,12 +65,12 @@ export default function DockPanel({ piece, onBack, exiting = false }) {
       <button
         type="button"
         aria-label="Close"
-        className="fixed inset-0 bg-ink/8"
+        className="fixed inset-0 z-0 bg-ink/8"
         onClick={onBack}
       />
 
       <motion.div
-        className="relative mx-auto max-w-6xl rounded-2xl border border-ink/12 bg-card/94 p-4 shadow-[0_16px_48px_rgba(29,41,81,0.12)] backdrop-blur-md sm:p-5"
+        className="relative z-10 mx-auto max-w-6xl rounded-2xl border border-ink/12 bg-card/94 p-4 shadow-[0_16px_48px_rgba(29,41,81,0.12)] backdrop-blur-md sm:p-5"
         initial={{ opacity: 0, y: 32 }}
         animate={{ opacity: exiting ? 0 : 1, y: exiting ? 24 : 0 }}
         exit={{ opacity: 0, y: 20, transition: { duration: 0.26 } }}
@@ -71,6 +78,7 @@ export default function DockPanel({ piece, onBack, exiting = false }) {
       >
         <div className="mb-4 flex flex-wrap items-center gap-4 border-b border-ink/8 pb-4">
           <BackButton color={piece.color} onBack={onBack} compact />
+          {canEdit ? <EditButton color={piece.color} onEdit={onEdit} /> : null}
           <div className="ml-auto text-right">
             <div
               className="text-xs uppercase tracking-[0.22em] sm:text-[11px]"

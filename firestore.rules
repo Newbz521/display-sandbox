@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email == 'law.yee2133@gmail.com';
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function validComment() {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['name', 'body', 'authorUid', 'createdAt', 'website'])
+        && data.authorUid == request.auth.uid
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 40
+        && data.body is string
+        && data.body.size() >= 3
+        && data.body.size() <= 500
+        && data.createdAt == request.time
+        && (!('website' in data) || data.website == '');
+    }
+
+    function rateLimitPath() {
+      return /databases/$(database)/documents/commentLimits/$(request.auth.uid);
+    }
+
+    function rateLimitFresh() {
+      return getAfter(rateLimitPath()).data.lastAt == request.time;
+    }
+
+    // Enable TTL on sandboxes.expireAt in Firebase Console (Firestore → TTL policies)
+    // so expired share docs are deleted automatically after ~1 hour.
+    function sandboxLimitPath() {
+      return /databases/$(database)/documents/sandboxLimits/$(request.auth.uid);
+    }
+
+    function sandboxRateLimitFresh() {
+      return getAfter(sandboxLimitPath()).data.lastAt == request.time;
+    }
+
+    function validSandboxPayload() {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'version', 'cells', 'pieces', 'activeColor', 'authorUid', 'createdAt', 'expireAt'
+        ])
+        && data.version == 1
+        && data.authorUid == request.auth.uid
+        && data.createdAt == request.time
+        && data.expireAt is timestamp
+        && data.expireAt > request.time + duration.value(55, 'm')
+        && data.expireAt < request.time + duration.value(65, 'm')
+        && data.activeColor is string
+        && data.activeColor.size() > 0
+        && data.activeColor.size() <= 20
+        && data.pieces is map
+        && data.pieces.size() > 0
+        && data.pieces.size() <= 7
+        && data.cells is list
+        && data.cells.size() == 36;
+    }
+
+    match /posts/{slug} {
+      allow read: if true;
+      allow create, update, delete: if isOwner();
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn() && validComment() && rateLimitFresh();
+        allow delete: if isOwner()
+          || (isSignedIn() && resource.data.authorUid == request.auth.uid);
+        allow update: if false;
+      }
+    }
+
+    match /pages/{id} {
+      allow read: if true;
+      allow create, update, delete: if isOwner();
+    }
+
+    match /site/{id} {
+      allow read: if true;
+      allow create, update, delete: if isOwner();
+    }
+
+    // Silent anonymous (or owner) rate limit: 90s cooldown, max 8 comments / day.
+    match /commentLimits/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastAt', 'dayCount', 'dayStart'])
+        && request.resource.data.lastAt == request.time
+        && request.resource.data.dayStart == request.time
+        && request.resource.data.dayCount == 1;
+
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastAt', 'dayCount', 'dayStart'])
+        && request.resource.data.lastAt == request.time
+        && resource.data.lastAt <= request.time - duration.value(90, 's')
+        && (
+          (
+            resource.data.dayStart > request.time - duration.value(1, 'd')
+            && request.resource.data.dayStart == resource.data.dayStart
+            && request.resource.data.dayCount == resource.data.dayCount + 1
+            && request.resource.data.dayCount <= 8
+          )
+          || (
+            resource.data.dayStart <= request.time - duration.value(1, 'd')
+            && request.resource.data.dayStart == request.time
+            && request.resource.data.dayCount == 1
+          )
+        );
+    }
+
+    // Ephemeral play boards — public read, create-only, 1h TTL field expireAt.
+    match /sandboxes/{id} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && validSandboxPayload()
+        && sandboxRateLimitFresh();
+      allow update, delete: if false;
+    }
+
+    // Session anti-spam for sandbox shares: 60s cooldown, max 5 / day.
+    match /sandboxLimits/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastAt', 'dayCount', 'dayStart'])
+        && request.resource.data.lastAt == request.time
+        && request.resource.data.dayStart == request.time
+        && request.resource.data.dayCount == 1;
+
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastAt', 'dayCount', 'dayStart'])
+        && request.resource.data.lastAt == request.time
+        && resource.data.lastAt <= request.time - duration.value(60, 's')
+        && (
+          (
+            resource.data.dayStart > request.time - duration.value(1, 'd')
+            && request.resource.data.dayStart == resource.data.dayStart
+            && request.resource.data.dayCount == resource.data.dayCount + 1
+            && request.resource.data.dayCount <= 5
+          )
+          || (
+            resource.data.dayStart <= request.time - duration.value(1, 'd')
+            && request.resource.data.dayStart == request.time
+            && request.resource.data.dayCount == 1
+          )
+        );
+    }
+  }
+}
