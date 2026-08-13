@@ -86,26 +86,34 @@ function EmptyPad({ pad, active, onPaintStart, onPaintEnter }) {
 
 /**
  * Separate play board: empty pads + extruded pieces built from sandbox state.
- * Hold and drag to paint with the active tool.
+ * Drag paints; a click (no drag) on a piece zooms it — no detail modal.
  */
 export default function SandboxBoard({
   scene,
   phase,
   tool,
+  selectedId = null,
   hoveredId,
   focusedCell = null,
   onHover,
+  onSelectPiece,
   onPaintCell,
   reduceMotion,
   viewOnly = false,
 }) {
   const painting = useRef(false)
   const lastKey = useRef('')
+  const gesture = useRef({ dragged: false, pieceId: null })
 
   useEffect(() => {
     const end = () => {
+      const g = gesture.current
+      if (g.pieceId && !g.dragged) {
+        onSelectPiece?.(g.pieceId)
+      }
       painting.current = false
       lastKey.current = ''
+      gesture.current = { dragged: false, pieceId: null }
     }
     window.addEventListener('pointerup', end)
     window.addEventListener('pointercancel', end)
@@ -113,25 +121,39 @@ export default function SandboxBoard({
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
     }
-  }, [])
+  }, [onSelectPiece])
 
-  const paint = (row, col, { start = false } = {}) => {
-    if (viewOnly || phase !== 'board') return
+  const paint = (row, col, { start = false, pieceId = null } = {}) => {
+    if (phase === 'detail' || phase === 'zooming') {
+      if (start && pieceId) {
+        gesture.current = { dragged: false, pieceId }
+      }
+      return
+    }
+    if (phase !== 'board') return
+
+    if (viewOnly) {
+      if (start && pieceId) gesture.current = { dragged: false, pieceId }
+      return
+    }
+
     const key = `${row},${col}`
     if (start) {
       painting.current = true
       lastKey.current = key
+      gesture.current = { dragged: false, pieceId }
       onPaintCell?.(row, col)
       return
     }
     if (!painting.current) return
     if (lastKey.current === key) return
     lastKey.current = key
+    gesture.current.dragged = true
     onPaintCell?.(row, col)
   }
 
   const focusRing =
-    focusedCell && scene.board
+    focusedCell && scene.board && phase === 'board'
       ? {
           left: scene.board.x + focusedCell.col * CELL,
           top: scene.board.y + focusedCell.row * CELL,
@@ -156,11 +178,12 @@ export default function SandboxBoard({
       />
 
       {!viewOnly &&
+        phase === 'board' &&
         scene.empties.map((pad) => (
           <EmptyPad
             key={`e-${pad.row}-${pad.col}`}
             pad={pad}
-            active={tool === 'stamp' || tool === 'ink' || tool === 'type'}
+            active={tool === 'stamp' || tool === 'ink' || tool === 'raise' || tool === 'lower'}
             onPaintStart={(r, c) => paint(r, c, { start: true })}
             onPaintEnter={(r, c) => paint(r, c)}
           />
@@ -171,17 +194,17 @@ export default function SandboxBoard({
           key={piece.id}
           piece={piece}
           phase={phase}
-          isSelected={false}
+          isSelected={piece.id === selectedId}
           isHovered={piece.id === hoveredId}
-          onSelect={() => {}}
+          onSelect={onSelectPiece}
           onHover={onHover}
           allowFloat={phase === 'board'}
           reduceMotion={reduceMotion}
           onCellClick={
-            !viewOnly && phase === 'board'
+            phase === 'board' || phase === 'detail' || phase === 'zooming'
               ? (block, opts = {}) => {
-                  if (opts.dragging) paint(block.row, block.col)
-                  else paint(block.row, block.col, { start: true })
+                  if (opts.dragging) paint(block.row, block.col, { pieceId: piece.id })
+                  else paint(block.row, block.col, { start: true, pieceId: piece.id })
                 }
               : null
           }

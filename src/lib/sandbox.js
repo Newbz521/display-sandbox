@@ -190,6 +190,62 @@ export function setCellChar(state, row, col, raw) {
   return { ...state, grid }
 }
 
+/** Filled cells of a piece in reading order (row, then col). */
+export function listPieceCells(state, pieceId) {
+  const cells = []
+  if (!pieceId) return cells
+  for (let r = 0; r < SANDBOX_SIZE; r++) {
+    for (let c = 0; c < SANDBOX_SIZE; c++) {
+      if (state.grid[r][c]?.pieceId === pieceId) cells.push({ row: r, col: c })
+    }
+  }
+  return cells
+}
+
+/**
+ * Type a character onto a cell (stamping first if empty), then advance focus
+ * to the next cell in the same piece so words can be typed in one run.
+ */
+export function applyCharAndAdvance(state, row, col, raw) {
+  let next = state.grid[row]?.[col] ? state : stampCell(state, row, col)
+  if (!next.grid[row]?.[col]) {
+    return { state: next, focus: { row, col } }
+  }
+  next = setCellChar(next, row, col, raw)
+  const pieceId = next.grid[row][col].pieceId
+  const cells = listPieceCells(next, pieceId)
+  const i = cells.findIndex((c) => c.row === row && c.col === col)
+  const focus = i >= 0 && i < cells.length - 1 ? cells[i + 1] : { row, col }
+  return { state: next, focus }
+}
+
+export function stepPieceFocus(state, row, col, delta) {
+  const cell = state.grid[row]?.[col]
+  if (!cell) return { row, col }
+  const cells = listPieceCells(state, cell.pieceId)
+  const i = cells.findIndex((c) => c.row === row && c.col === col)
+  if (i < 0) return { row, col }
+  const j = Math.min(cells.length - 1, Math.max(0, i + delta))
+  return cells[j]
+}
+
+/** Move focus along the grid; prefer landing on a filled cell in that direction. */
+export function stepGridFocus(state, row, col, dRow, dCol) {
+  let r = row + dRow
+  let c = col + dCol
+  while (r >= 0 && r < SANDBOX_SIZE && c >= 0 && c < SANDBOX_SIZE) {
+    if (state.grid[r][c]) return { row: r, col: c }
+    r += dRow
+    c += dCol
+  }
+  const nr = row + dRow
+  const nc = col + dCol
+  if (nr >= 0 && nr < SANDBOX_SIZE && nc >= 0 && nc < SANDBOX_SIZE) {
+    return { row: nr, col: nc }
+  }
+  return { row, col }
+}
+
 export function resetSandbox() {
   return createSandboxState()
 }

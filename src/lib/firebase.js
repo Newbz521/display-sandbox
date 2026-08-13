@@ -26,9 +26,13 @@ export function firestoreWriteError(err) {
       'Firestore blocked this save. In Firebase Console → Firestore → Rules, paste the contents of firestore.rules and click Publish.',
     )
   }
-  if (code === 'auth/operation-not-allowed') {
+  if (
+    code === 'auth/operation-not-allowed' ||
+    code === 'auth/admin-restricted-operation' ||
+    /admin-restricted-operation|operation-not-allowed/i.test(msg)
+  ) {
     return new Error(
-      'Anonymous sign-in is off. In Firebase Console → Authentication → Sign-in method, enable Anonymous.',
+      'Anonymous sign-in is off or restricted. In Firebase Console → Authentication → Sign-in method, enable Anonymous, then try again.',
     )
   }
   return err instanceof Error ? err : new Error(msg || 'Could not save.')

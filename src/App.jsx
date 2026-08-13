@@ -55,14 +55,17 @@ import SandboxEntry from './components/SandboxEntry'
 import SandboxExpired from './components/SandboxExpired'
 import {
   adjustCellHeight,
+  applyCharAndAdvance,
   buildPlayScene,
   createSandboxState,
   eraseCell,
+  ensureActivePiece,
   resetSandbox,
-  setCellChar,
   setSandboxColor,
   stampCell,
   startNewPiece,
+  stepGridFocus,
+  stepPieceFocus,
 } from './lib/sandbox'
 import { loadSandbox, saveSandbox } from './lib/sandboxStore'
 
@@ -103,8 +106,9 @@ export default function App() {
   const [sandboxOpen, setSandboxOpen] = useState(false)
   const [sandboxState, setSandboxState] = useState(createSandboxState)
   const [sandboxTool, setSandboxTool] = useState('stamp')
-  const [sandboxPhase, setSandboxPhase] = useState('board') // board | zooming | returning
+  const [sandboxPhase, setSandboxPhase] = useState('board') // board | zooming | detail | exiting | returning
   const [sandboxFocus, setSandboxFocus] = useState(null) // { row, col } | null
+  const [sandboxSelectedId, setSandboxSelectedId] = useState(null)
   const [sandboxViewOnly, setSandboxViewOnly] = useState(false)
   const [sandboxExpired, setSandboxExpired] = useState(false)
   const [sandboxLoading, setSandboxLoading] = useState(
@@ -174,6 +178,10 @@ export default function App() {
   const playLoadGen = useRef(0)
 
   const focus = useMemo(() => getFocusTarget(selectedId, scene), [selectedId, scene])
+  const sandboxPieceFocus = useMemo(
+    () => (sandboxOpen ? getFocusTarget(sandboxSelectedId, playScene) : null),
+    [sandboxOpen, sandboxSelectedId, playScene],
+  )
   const blogItems = useMemo(() => mergeBlogPosts([], livePosts), [livePosts])
   const focusedPiece = useMemo(() => {
     if (focus?.kind !== 'piece') return focus
@@ -197,7 +205,10 @@ export default function App() {
   const showGrid = phase === 'board' && gridReady && !suppressHomeBoard
   const sceneTransitioning =
     (!sandboxOpen && (phase === 'zooming' || phase === 'exiting' || phase === 'returning')) ||
-    (sandboxOpen && (sandboxPhase === 'zooming' || sandboxPhase === 'returning'))
+    (sandboxOpen &&
+      (sandboxPhase === 'zooming' ||
+        sandboxPhase === 'exiting' ||
+        sandboxPhase === 'returning'))
 
   const camera = useMemo(() => {
     const mobileFooter = cameraDebugOpen ? cameraDebug.mobileFooter : MOBILE_FOOTER_RESERVE
@@ -214,9 +225,19 @@ export default function App() {
         ? MOBILE_CAMERA_VIEW_OFFSET_Y
         : 0
 
+    const sandboxZoomed =
+      sandboxOpen &&
+      sandboxPieceFocus &&
+      (sandboxPhase === 'zooming' || sandboxPhase === 'detail')
+
     // Pull back to the board while the panel fades — avoids a camera + piece spike at `returning`.
-    const pullToBoard =
-      sandboxOpen || sandboxLoading || !focus || phase === 'exiting' || phase === 'returning'
+    const pullToBoard = sandboxZoomed
+      ? false
+      : sandboxOpen ||
+        sandboxLoading ||
+        !focus ||
+        phase === 'exiting' ||
+        phase === 'returning'
 
     if (pullToBoard) {
       const frame =
@@ -234,17 +255,35 @@ export default function App() {
         zRange: [0, THICKNESS],
       })
     }
-    const rect = focusRect(focus)
+
+    const target = sandboxZoomed ? sandboxPieceFocus : focus
+    const rect = focusRect(target)
+    const zoomPhase = sandboxZoomed ? sandboxPhase : phase
     return cameraFor(rect, vw, camVh, {
       layout: scene,
       tiltX: sceneTilt,
       spinZ: sceneSpin,
-      padding: phase === 'detail' ? detailPadding(focus.tier) : padding,
-      maxScale: focus.tier === 'dock' ? 8 : focus.kind === 'margin' ? 10 : 12,
+      padding: zoomPhase === 'detail' ? detailPadding(target.tier) : padding,
+      maxScale: target.tier === 'dock' ? 8 : target.kind === 'margin' ? 10 : 12,
       scaleMultiplier: cameraDebugOpen ? scaleMultiplier : 1,
       viewOffsetY: cameraDebugOpen ? viewOffsetY : 0,
     })
-  }, [focus, phase, vw, vh, scene, sceneTilt, sceneSpin, compact, cameraDebugOpen, cameraDebug, sandboxOpen, sandboxLoading])
+  }, [
+    focus,
+    phase,
+    vw,
+    vh,
+    scene,
+    sceneTilt,
+    sceneSpin,
+    compact,
+    cameraDebugOpen,
+    cameraDebug,
+    sandboxOpen,
+    sandboxLoading,
+    sandboxPhase,
+    sandboxPieceFocus,
+  ])
 
   const spring = useMemo(() => {
     if (cameraDebugOpen) return { stiffness: 800, damping: 50 }
@@ -294,6 +333,7 @@ export default function App() {
     setSandboxTool('stamp')
     setSandboxPhase('board')
     setSandboxFocus(null)
+    setSandboxSelectedId(null)
     setSandboxViewOnly(false)
     setSandboxExpired(false)
     setSandboxShareMessage('')
@@ -310,6 +350,7 @@ export default function App() {
     setSandboxTool('stamp')
     setSandboxPhase('board')
     setSandboxFocus(null)
+    setSandboxSelectedId(null)
     setSandboxViewOnly(false)
     setSandboxShareBusy(false)
     setSandboxShareMessage('')
@@ -318,6 +359,27 @@ export default function App() {
     setHoveredId(null)
     if (parsePlayRoute().kind === 'play') writePlayUrl(undefined, { replace: true })
   }, [])
+
+  const closeSandboxPiece = useCallback(() => {
+    if (sandboxPhase === 'detail' || sandboxPhase === 'zooming') {
+      setSandboxPhase('exiting')
+    }
+  }, [sandboxPhase])
+
+  const selectSandboxPiece = useCallback(
+    (id) => {
+      if (!id) return
+      if (sandboxPhase === 'detail' || sandboxPhase === 'zooming') {
+        if (id === sandboxSelectedId) closeSandboxPiece()
+        return
+      }
+      if (sandboxPhase !== 'board') return
+      setSandboxSelectedId(id)
+      setSandboxPhase('zooming')
+      setHoveredId(null)
+    },
+    [sandboxPhase, sandboxSelectedId, closeSandboxPiece],
+  )
 
   const openSharedSandbox = useCallback(async (id, { replace = true } = {}) => {
     const gen = ++playLoadGen.current
@@ -395,15 +457,6 @@ export default function App() {
     (row, col) => {
       if (sandboxViewOnly || sandboxPhase !== 'board') return
 
-      if (sandboxTool === 'type') {
-        setSandboxState((s) => {
-          if (!s.grid[row][col]) return stampCell(s, row, col)
-          return s
-        })
-        setSandboxFocus({ row, col })
-        return
-      }
-
       if (sandboxTool === 'erase') {
         setSandboxState((s) => eraseCell(s, row, col))
         setSandboxFocus((f) => (f && f.row === row && f.col === col ? null : f))
@@ -419,7 +472,14 @@ export default function App() {
         setSandboxFocus({ row, col })
         return
       }
-      setSandboxState((s) => stampCell(s, row, col))
+
+      // Paint: stamp empty / other-piece cells; re-clicking your own just selects for typing.
+      setSandboxState((s) => {
+        const primed = ensureActivePiece(s)
+        const existing = primed.grid[row][col]
+        if (existing && existing.pieceId === primed.activePieceId) return primed
+        return stampCell(primed, row, col)
+      })
       setSandboxFocus({ row, col })
     },
     [sandboxTool, sandboxPhase, sandboxViewOnly],
@@ -429,12 +489,16 @@ export default function App() {
     if (sandboxPhase !== 'board' || playScene.pieces.length === 0) return
     sandboxScatterTimers.current.forEach(clearTimeout)
     sandboxScatterTimers.current = []
+    setSandboxSelectedId(null)
     setSandboxPhase('zooming')
     const outMs = reduceMotion ? 200 : 720
     const backMs = outMs + returnHoldMs(reduceMotion)
     sandboxScatterTimers.current.push(
       window.setTimeout(() => setSandboxPhase('returning'), outMs),
-      window.setTimeout(() => setSandboxPhase('board'), backMs),
+      window.setTimeout(() => {
+        setSandboxPhase('board')
+        setSandboxSelectedId(null)
+      }, backMs),
     )
   }, [sandboxPhase, playScene.pieces.length, reduceMotion])
 
@@ -546,6 +610,7 @@ export default function App() {
         setSandboxTool('stamp')
         setSandboxPhase('board')
         setSandboxFocus(null)
+        setSandboxSelectedId(null)
         setSandboxViewOnly(false)
         setSandboxShareMessage('')
         setSandboxShareError('')
@@ -619,12 +684,40 @@ export default function App() {
   }, [phase, focus, reduceMotion])
 
   useEffect(() => {
+    if (sandboxPhase !== 'zooming' || !sandboxSelectedId) return
+    const tier = sandboxPieceFocus?.tier ?? 'compact'
+    const t = setTimeout(() => setSandboxPhase('detail'), zoomDelay(tier, reduceMotion))
+    return () => clearTimeout(t)
+  }, [sandboxPhase, sandboxSelectedId, sandboxPieceFocus, reduceMotion])
+
+  useEffect(() => {
+    if (sandboxPhase !== 'exiting') return
+    const t = setTimeout(() => setSandboxPhase('returning'), exitHoldMs(reduceMotion))
+    return () => clearTimeout(t)
+  }, [sandboxPhase, reduceMotion])
+
+  useEffect(() => {
+    if (sandboxPhase !== 'returning') return
+    const t = setTimeout(() => {
+      startTransition(() => {
+        setSandboxSelectedId(null)
+        setSandboxPhase('board')
+      })
+    }, returnHoldMs(reduceMotion))
+    return () => clearTimeout(t)
+  }, [sandboxPhase, reduceMotion])
+
+  useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape' && deskOpen) {
         closeDesk()
         return
       }
       if (e.key === 'Escape' && sandboxOpen) {
+        if (sandboxPhase === 'detail' || sandboxPhase === 'zooming') {
+          closeSandboxPiece()
+          return
+        }
         if (sandboxFocus) {
           setSandboxFocus(null)
           return
@@ -635,18 +728,73 @@ export default function App() {
       if (
         sandboxOpen &&
         !sandboxViewOnly &&
-        sandboxPhase === 'board' &&
+        (sandboxPhase === 'board' || sandboxPhase === 'detail') &&
         sandboxFocus &&
         !e.metaKey &&
         !e.ctrlKey &&
-        !e.altKey &&
-        e.key.length === 1 &&
-        /[a-zA-Z0-9]/.test(e.key)
+        !e.altKey
       ) {
-        e.preventDefault()
         const { row, col } = sandboxFocus
-        setSandboxState((s) => setCellChar(s, row, col, e.key))
-        return
+
+        if (e.key === 'Tab') {
+          e.preventDefault()
+          setSandboxState((s) => {
+            const next = stepPieceFocus(s, row, col, e.shiftKey ? -1 : 1)
+            queueMicrotask(() => setSandboxFocus(next))
+            return s
+          })
+          return
+        }
+
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          const dRow = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
+          const dCol = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+          setSandboxState((s) => {
+            const next = stepGridFocus(s, row, col, dRow, dCol)
+            queueMicrotask(() => setSandboxFocus(next))
+            return s
+          })
+          return
+        }
+
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+          e.preventDefault()
+          setSandboxState((s) => {
+            const prev = stepPieceFocus(s, row, col, -1)
+            const next = eraseCell(s, row, col)
+            const focus =
+              prev.row === row && prev.col === col
+                ? null
+                : next.grid[prev.row]?.[prev.col]
+                  ? prev
+                  : null
+            queueMicrotask(() => setSandboxFocus(focus))
+            return next
+          })
+          return
+        }
+
+        if (e.key === '=' || e.key === '+' || e.key === ']') {
+          e.preventDefault()
+          setSandboxState((s) => adjustCellHeight(s, row, col, 0.12))
+          return
+        }
+        if (e.key === '-' || e.key === '_' || e.key === '[') {
+          e.preventDefault()
+          setSandboxState((s) => adjustCellHeight(s, row, col, -0.12))
+          return
+        }
+
+        if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key)) {
+          e.preventDefault()
+          setSandboxState((s) => {
+            const { state: next, focus } = applyCharAndAdvance(s, row, col, e.key)
+            queueMicrotask(() => setSandboxFocus(focus))
+            return next
+          })
+          return
+        }
       }
       if (e.key === 'Escape' && (phase === 'detail' || phase === 'exiting')) back()
       if (e.key === '?' && phase === 'board' && !cameraDebugOpen && !sandboxOpen) select('legend')
@@ -687,9 +835,10 @@ export default function App() {
     sandboxFocus,
     sandboxViewOnly,
     exitSandbox,
+    closeSandboxPiece,
   ])
 
-  const accent = focus ?? hovered
+  const accent = (sandboxOpen ? sandboxPieceFocus : focus) ?? hovered
   const bgAccent = sceneTransitioning ? frozenAccentRef.current : accent
 
   useEffect(() => {
@@ -738,9 +887,11 @@ export default function App() {
               scene={playScene}
               phase={sandboxPhase}
               tool={sandboxTool}
+              selectedId={sandboxSelectedId}
               hoveredId={hoveredId}
               focusedCell={sandboxViewOnly ? null : sandboxFocus}
               onHover={setHoveredId}
+              onSelectPiece={selectSandboxPiece}
               onPaintCell={onSandboxPaintCell}
               reduceMotion={reduceMotion}
               viewOnly={sandboxViewOnly}

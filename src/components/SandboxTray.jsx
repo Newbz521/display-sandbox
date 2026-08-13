@@ -8,6 +8,13 @@ const toolBtnActive =
 
 const PLAY_INK = '#e8785c'
 
+const HINTS = {
+  stamp: 'Drag to paint. Click a piece to zoom. Type to label · arrows move · Esc zooms out.',
+  raise: 'Click or drag to raise blocks. Or select a block and press +.',
+  lower: 'Click or drag to lower blocks. Or select a block and press −.',
+  erase: 'Click or drag to clear blocks. ⌫ also erases the selected block.',
+}
+
 /**
  * In-play drafting tray (screen-space). Entry into sandbox is the 3D Play block on the board.
  * viewOnly: shared /play/{id} — Done only, no tools.
@@ -65,11 +72,7 @@ export default function SandboxTray({
     >
       <div className="rounded-2xl border border-ink/12 bg-card/92 px-3.5 py-3 shadow-[0_16px_40px_rgba(29,41,81,0.12)] backdrop-blur-md">
         <div className="text-[10px] uppercase tracking-[0.2em] text-ink/40">Sandbox</div>
-        <p className="mt-1 text-xs leading-snug text-ink/55">
-          {tool === 'type'
-            ? 'Click a block, then press a letter or number key.'
-            : 'Pick ink, then click or drag. Type tool edits each letter.'}
-        </p>
+        <p className="mt-1 text-xs leading-snug text-ink/55">{HINTS[tool] ?? HINTS.stamp}</p>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {SANDBOX_PALETTE.map((c) => (
@@ -93,8 +96,7 @@ export default function SandboxTray({
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {[
-            { id: 'stamp', label: 'Stamp' },
-            { id: 'type', label: 'Type' },
+            { id: 'stamp', label: 'Paint' },
             { id: 'raise', label: 'Raise' },
             { id: 'lower', label: 'Lower' },
             { id: 'erase', label: 'Erase' },
