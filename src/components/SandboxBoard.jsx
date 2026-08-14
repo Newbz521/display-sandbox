@@ -86,7 +86,7 @@ function EmptyPad({ pad, active, onPaintStart, onPaintEnter }) {
 
 /**
  * Separate play board: empty pads + extruded pieces built from sandbox state.
- * Drag paints; a click (no drag) on a piece zooms it — no detail modal.
+ * Pointer zooms; Select focuses a block; other tools paint/sculpt.
  */
 export default function SandboxBoard({
   scene,
@@ -103,17 +103,20 @@ export default function SandboxBoard({
 }) {
   const painting = useRef(false)
   const lastKey = useRef('')
-  const gesture = useRef({ dragged: false, pieceId: null })
+  const gesture = useRef({ dragged: false, pieceId: null, canZoom: false })
+  const zoomMode = viewOnly || tool === 'pointer'
+  const pickMode = tool === 'select'
+  const editBoard = !viewOnly && !zoomMode
 
   useEffect(() => {
     const end = () => {
       const g = gesture.current
-      if (g.pieceId && !g.dragged) {
+      if (g.canZoom && g.pieceId && !g.dragged) {
         onSelectPiece?.(g.pieceId)
       }
       painting.current = false
       lastKey.current = ''
-      gesture.current = { dragged: false, pieceId: null }
+      gesture.current = { dragged: false, pieceId: null, canZoom: false }
     }
     window.addEventListener('pointerup', end)
     window.addEventListener('pointercancel', end)
@@ -124,16 +127,19 @@ export default function SandboxBoard({
   }, [onSelectPiece])
 
   const paint = (row, col, { start = false, pieceId = null } = {}) => {
+    // Zoomed: only Pointer (or view-only) can click to zoom back out.
     if (phase === 'detail' || phase === 'zooming') {
-      if (start && pieceId) {
-        gesture.current = { dragged: false, pieceId }
+      if (start && pieceId && zoomMode) {
+        gesture.current = { dragged: false, pieceId, canZoom: true }
       }
       return
     }
     if (phase !== 'board') return
 
-    if (viewOnly) {
-      if (start && pieceId) gesture.current = { dragged: false, pieceId }
+    if (zoomMode) {
+      if (start && pieceId) {
+        gesture.current = { dragged: false, pieceId, canZoom: true }
+      }
       return
     }
 
@@ -141,7 +147,7 @@ export default function SandboxBoard({
     if (start) {
       painting.current = true
       lastKey.current = key
-      gesture.current = { dragged: false, pieceId }
+      gesture.current = { dragged: false, pieceId: null, canZoom: false }
       onPaintCell?.(row, col)
       return
     }
@@ -149,11 +155,13 @@ export default function SandboxBoard({
     if (lastKey.current === key) return
     lastKey.current = key
     gesture.current.dragged = true
+    // Select tool: only the initial click matters (no drag-select).
+    if (pickMode) return
     onPaintCell?.(row, col)
   }
 
   const focusRing =
-    focusedCell && scene.board && phase === 'board'
+    focusedCell && scene.board && phase === 'board' && editBoard
       ? {
           left: scene.board.x + focusedCell.col * CELL,
           top: scene.board.y + focusedCell.row * CELL,
@@ -177,7 +185,8 @@ export default function SandboxBoard({
         }}
       />
 
-      {!viewOnly &&
+      {editBoard &&
+        !pickMode &&
         phase === 'board' &&
         scene.empties.map((pad) => (
           <EmptyPad
@@ -196,7 +205,7 @@ export default function SandboxBoard({
           phase={phase}
           isSelected={piece.id === selectedId}
           isHovered={piece.id === hoveredId}
-          onSelect={onSelectPiece}
+          onSelect={zoomMode ? onSelectPiece : undefined}
           onHover={onHover}
           allowFloat={phase === 'board'}
           reduceMotion={reduceMotion}

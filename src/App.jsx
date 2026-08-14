@@ -457,6 +457,16 @@ export default function App() {
     (row, col) => {
       if (sandboxViewOnly || sandboxPhase !== 'board') return
 
+      if (sandboxTool === 'select') {
+        setSandboxState((s) => {
+          if (s.grid[row][col]) {
+            queueMicrotask(() => setSandboxFocus({ row, col }))
+          }
+          return s
+        })
+        return
+      }
+
       if (sandboxTool === 'erase') {
         setSandboxState((s) => eraseCell(s, row, col))
         setSandboxFocus((f) => (f && f.row === row && f.col === col ? null : f))

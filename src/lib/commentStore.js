@@ -7,6 +7,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { ensureAnonymousAuth, firestoreWriteError, getFirebase } from './firebase'
+import { censorProfanity } from './profanity'
 
 export const COMMENT_COOLDOWN_MS = 90_000
 export const COMMENT_MAX_PER_DAY = 8
@@ -71,7 +72,12 @@ function assertClientLimits({ name, body, website }) {
     throw new Error(`That's enough for today — try again tomorrow (${COMMENT_MAX_PER_DAY} / day).`)
   }
 
-  return { name: trimmedName, body: trimmedBody, dayCount, today }
+  return {
+    name: censorProfanity(trimmedName),
+    body: censorProfanity(trimmedBody),
+    dayCount,
+    today,
+  }
 }
 
 export function subscribeComments(postSlug, onChange, onError) {
@@ -91,8 +97,8 @@ export function subscribeComments(postSlug, onChange, onError) {
         const data = d.data()
         return {
           id: d.id,
-          name: data.name || 'Anonymous',
-          body: data.body || '',
+          name: censorProfanity(data.name || 'Anonymous'),
+          body: censorProfanity(data.body || ''),
           authorUid: data.authorUid || null,
           createdAt: data.createdAt?.toDate?.() ?? null,
           pending: d.metadata.hasPendingWrites,

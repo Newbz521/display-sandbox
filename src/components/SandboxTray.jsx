@@ -9,7 +9,9 @@ const toolBtnActive =
 const PLAY_INK = '#e8785c'
 
 const HINTS = {
-  stamp: 'Drag to paint. Click a piece to zoom. Type to label · arrows move · Esc zooms out.',
+  pointer: 'Click a piece to zoom in. Click again or Esc to zoom out.',
+  select: 'Click a block to select it. Then type, use arrows, + / −, or ⌫.',
+  stamp: 'Drag to paint. Type to label · arrows move · ⌫ erases.',
   raise: 'Click or drag to raise blocks. Or select a block and press +.',
   lower: 'Click or drag to lower blocks. Or select a block and press −.',
   erase: 'Click or drag to clear blocks. ⌫ also erases the selected block.',
@@ -96,6 +98,8 @@ export default function SandboxTray({
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {[
+            { id: 'pointer', label: 'Pointer' },
+            { id: 'select', label: 'Select' },
             { id: 'stamp', label: 'Paint' },
             { id: 'raise', label: 'Raise' },
             { id: 'lower', label: 'Lower' },
