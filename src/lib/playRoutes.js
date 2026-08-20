@@ -1,7 +1,6 @@
 /**
  * Sandbox share deep links:
  *   /play/{uuid}       → view shared board
- *   /#/play/{uuid}     → hash fallback
  */
 
 const UUID_RE =
@@ -21,11 +20,23 @@ export function absolutePlayUrl(id) {
 }
 
 /** @returns {{ kind: 'home' } | { kind: 'play', id: string }} */
-export function parsePlayRoute(location = typeof window === 'undefined' ? null : window.location) {
-  if (!location) return { kind: 'home' }
+export function parsePlayRoute(locationOrPath) {
+  let path = '/'
+  let hash = ''
+  if (typeof locationOrPath === 'string') {
+    path = locationOrPath
+  } else if (locationOrPath?.pathname) {
+    path = locationOrPath.pathname
+    hash = locationOrPath.hash || ''
+  } else if (typeof window !== 'undefined') {
+    path = window.location.pathname
+    hash = window.location.hash || ''
+  } else {
+    return { kind: 'home' }
+  }
 
-  const path = (location.pathname || '/').replace(/\/+$/, '') || '/'
-  const hash = (location.hash || '').replace(/^#/, '')
+  path = (path || '/').replace(/\/+$/, '') || '/'
+  hash = hash.replace(/^#/, '')
 
   if (path.startsWith('/play/')) {
     const id = path.slice('/play/'.length).split('/').filter(Boolean)[0] || null
@@ -41,9 +52,14 @@ export function parsePlayRoute(location = typeof window === 'undefined' ? null :
   return { kind: 'home' }
 }
 
-export function writePlayUrl(id, { replace = false } = {}) {
-  if (typeof window === 'undefined') return
+export function writePlayUrl(id, { replace = false, router } = {}) {
   const next = id ? playPath(id) : '/'
+  if (router) {
+    if (replace) router.replace(next)
+    else router.push(next)
+    return
+  }
+  if (typeof window === 'undefined') return
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
   if (current === next || (next === '/' && (current === '/' || current === ''))) return
   const method = replace ? 'replaceState' : 'pushState'

@@ -76,7 +76,7 @@ function Timeline({ content, color }) {
   return (
     <div className="space-y-10">
       {content.items.map((item, i) => (
-        <Section key={item.title} i={i}>
+        <Section key={`${item.title}-${item.org}-${item.period}`} i={i}>
           <div className="relative border-l border-ink/12 pl-6">
             <span
               className="absolute -left-1.25 top-2 h-2.25 w-2.25 rounded-sm"

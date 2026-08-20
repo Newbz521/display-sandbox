@@ -1,10 +1,32 @@
 import { memo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BLOCK_GAP, BLOCK_LIFT, CELL, RIPPLE_SPEED, TOP_RADIUS } from '../lib/layout'
-import { scatterTransition } from '../lib/pieceTiers'
+import { arrivalDelay, arrivalTransition, scatterTransition } from '../lib/pieceTiers'
 import { darken, lighten, readableInk } from '../lib/color'
 
 const SIZE = CELL - BLOCK_GAP
+
+/**
+ * Off-board start for a block on first load. Mixes the piece's outward scatter
+ * direction with the block's radial offset inside the piece so letters of the
+ * same word fan in from different headings rather than sliding as one slab.
+ */
+function blockFlight(block, piece, i) {
+  const cx = piece.width / 2
+  const cy = piece.height / 2
+  const dx = block.x + SIZE / 2 - cx
+  const dy = block.y + SIZE / 2 - cy
+  const len = Math.hypot(dx, dy) || 1
+  const ox = piece.dir.x * 0.55 + (dx / len) * 0.45
+  const oy = piece.dir.y * 0.55 + (dy / len) * 0.45
+  const n = Math.hypot(ox, oy) || 1
+  const throwDist = 360 + piece.dist * 0.2 + (i % 4) * 52
+  return {
+    x: (ox / n) * throwDist,
+    y: (oy / n) * throwDist,
+    z: 200 + (i % 5) * 40,
+  }
+}
 
 /**
  * One extruded block: a top face lifted by the block's own height, plus the two
@@ -17,9 +39,23 @@ const SIZE = CELL - BLOCK_GAP
  * Nothing here uses opacity or filter — both force `transform-style: flat` and
  * would collapse the extrusion.
  */
-function Block({ block, color, lit, lift, delay, onEnter, onClick, onPointerDown, onPaintEnter }) {
+function Block({
+  block,
+  color,
+  lit,
+  lift,
+  delay,
+  flight,
+  enterDelay,
+  reduceMotion,
+  onEnter,
+  onClick,
+  onPointerDown,
+  onPaintEnter,
+}) {
   const h = block.h
   const top = lit ? lighten(color, 0.16) : color
+  const [introing, setIntroing] = useState(Boolean(flight) && !reduceMotion)
   const interact = {
     onClick,
     onPointerDown,
@@ -39,9 +75,16 @@ function Block({ block, color, lit, lift, delay, onEnter, onClick, onPointerDown
         height: SIZE,
         transformStyle: 'preserve-3d',
       }}
-      initial={false}
-      animate={{ z: lift }}
-      transition={{ type: 'spring', stiffness: 260, damping: 22, delay }}
+      initial={introing ? flight : false}
+      animate={{ x: 0, y: 0, z: lift }}
+      transition={
+        introing
+          ? arrivalTransition(enterDelay, reduceMotion)
+          : { type: 'spring', stiffness: 260, damping: 22, delay }
+      }
+      onAnimationComplete={() => {
+        if (introing) setIntroing(false)
+      }}
     >
       {/* south wall — the cut edge of the card, so only slightly darker */}
       <div
@@ -168,15 +211,16 @@ function Piece({
   onHover,
   reduceMotion,
   allowFloat = true,
+  entering = false,
   onCellClick = null,
 }) {
-  const idle = phase === 'board'
-  const floating = phase === 'board' && allowFloat
+  const idle = phase === 'board' && !entering
+  const floating = phase === 'board' && allowFloat && !entering
   const scattered =
     (phase === 'zooming' || phase === 'detail' || phase === 'exiting') && !isSelected
   const returning = phase === 'returning'
   const settling = phase === 'board' && !allowFloat
-  const inMotion = scattered || returning || settling
+  const inMotion = scattered || returning || settling || entering
   const lit = isHovered || isSelected
   const cellMode = typeof onCellClick === 'function'
 
@@ -273,6 +317,9 @@ function Piece({
               lit={lit}
               lift={lift}
               delay={delay}
+              flight={entering ? blockFlight(block, piece, i) : null}
+              enterDelay={arrivalDelay(piece, i, reduceMotion)}
+              reduceMotion={reduceMotion}
               onEnter={() => enterBlock(i)}
               onClick={undefined}
               onPointerDown={

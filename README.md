@@ -8,10 +8,12 @@ in until that piece fills the screen, and its page opens.
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev      # http://localhost:3000
 npm run build
-npm run preview
+npm start
 ```
+
+Next.js App Router with SSR metadata, Open Graph, JSON-LD, `sitemap.xml`, and `robots.txt` on every public route. Set `NEXT_PUBLIC_SITE_URL` to your production origin (no trailing slash) so canonicals and structured data use absolute URLs.
 
 ## The square
 

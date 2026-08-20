@@ -1,8 +1,11 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { CREDIT_Z } from '../lib/layout'
 import { OWNER } from '../data/portfolio'
 
+const ease = [0.16, 1, 0.3, 1]
+
 export default function BoardCredit({ visible, layout, compact = false, owner = OWNER }) {
+  const reduceMotion = useReducedMotion()
   const { x, y } = layout.credit
 
   return (
@@ -11,11 +14,26 @@ export default function BoardCredit({ visible, layout, compact = false, owner = 
       style={{
         left: x,
         top: y,
-        transform: `translateX(-50%) translateZ(${CREDIT_Z}px)`,
+        // Framer owns the transform — keep centering + board-plane lift here
+        // so opacity/y animation does not wipe translateX / translateZ.
+        x: '-50%',
+        z: CREDIT_Z,
         transformStyle: 'preserve-3d',
       }}
-      animate={{ opacity: visible ? 1 : 0 }}
-      transition={{ duration: 0.5, ease: 'easeOut' }}
+      initial={false}
+      animate={{
+        opacity: visible ? 1 : 0,
+        y: visible ? 0 : reduceMotion ? 0 : 14,
+      }}
+      transition={
+        reduceMotion
+          ? { duration: 0.15 }
+          : {
+              duration: visible ? 0.72 : 0.32,
+              ease,
+              delay: visible ? 0.06 : 0,
+            }
+      }
       aria-hidden
     >
       <div

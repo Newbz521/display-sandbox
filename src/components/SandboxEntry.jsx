@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { darken, lighten, readableInk } from '../lib/color'
+
+const ease = [0.16, 1, 0.3, 1]
 
 const TRAY = '#cbb89a'
 const STAMP = '#e8785c'
@@ -78,10 +80,11 @@ function Extrude({
  * animation never steals or cancels the click.
  */
 export default function SandboxEntry({ entry, visible, onEnter }) {
+  const reduceMotion = useReducedMotion()
   const [hovered, setHovered] = useState(false)
   const [pressed, setPressed] = useState(false)
 
-  if (!entry || !visible) return null
+  if (!entry) return null
 
   const W = entry.width
   const D = entry.height
@@ -95,31 +98,46 @@ export default function SandboxEntry({ entry, visible, onEnter }) {
   }
 
   return (
-    <div
-      className="absolute"
-      style={{
-        left: entry.x,
-        top: entry.y,
-        width: W,
-        height: D,
-        transformStyle: 'preserve-3d',
-        pointerEvents: 'none',
-      }}
-    >
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          transformStyle: 'preserve-3d',
-          pointerEvents: 'none',
-        }}
-        initial={false}
-        animate={{
-          z: pressed ? -4 : hovered ? 22 : 0,
-          rotateZ: pressed ? 0.6 : hovered ? -1.8 : 0,
-          scale: pressed ? 0.97 : hovered ? 1.03 : 1,
-        }}
-        transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-      >
+    <AnimatePresence>
+      {visible ? (
+        <motion.div
+          key="sandbox-entry"
+          className="absolute"
+          style={{
+            left: entry.x,
+            top: entry.y,
+            width: W,
+            height: D,
+            transformStyle: 'preserve-3d',
+            pointerEvents: 'none',
+          }}
+          initial={reduceMotion ? false : { y: 28, z: 72, scale: 0.9 }}
+          animate={{ y: 0, z: 0, scale: 1 }}
+          exit={
+            reduceMotion
+              ? { opacity: 0, transition: { duration: 0.12 } }
+              : { y: 16, z: 36, scale: 0.94, transition: { duration: 0.34, ease } }
+          }
+          transition={
+            reduceMotion
+              ? { duration: 0.01 }
+              : { duration: 0.78, ease, delay: 0.1 }
+          }
+        >
+          <motion.div
+            className="absolute inset-0"
+            style={{
+              transformStyle: 'preserve-3d',
+              pointerEvents: 'none',
+            }}
+            initial={false}
+            animate={{
+              z: pressed ? -4 : hovered ? 22 : 0,
+              rotateZ: pressed ? 0.6 : hovered ? -1.8 : 0,
+              scale: pressed ? 0.97 : hovered ? 1.03 : 1,
+            }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+          >
         {/* Tray base */}
         <Extrude x={0} y={0} w={W} d={D} h={11} color={TRAY} radius={12}>
           <div
@@ -302,6 +320,8 @@ export default function SandboxEntry({ entry, visible, onEnter }) {
           }
         }}
       />
-    </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   )
 }

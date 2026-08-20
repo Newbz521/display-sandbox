@@ -1,4 +1,7 @@
+'use client'
+
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AnimatePresence,
   motion,
@@ -25,9 +28,10 @@ import {
   cameraFor,
 } from './lib/layout'
 import { focusRect, getFocusTarget } from './lib/focus'
-import { detailPadding, cameraSpring, exitHoldMs, returnHoldMs, zoomDelay } from './lib/pieceTiers'
-import { parseBlogRoute, writeBlogUrl, writeDeskUrl } from './lib/blogRoutes'
-import { parsePlayRoute, writePlayUrl } from './lib/playRoutes'
+import { detailPadding, cameraSpring, exitHoldMs, returnHoldMs, zoomDelay, arrivalHoldMs } from './lib/pieceTiers'
+import { parseBlogRoute } from './lib/blogRoutes'
+import { parsePlayRoute, writePlayUrl, playPath } from './lib/playRoutes'
+import { focusPath, parseFocusRoute } from './lib/focusRoutes'
 import { BLOG_SEED } from './data/blogSeed'
 import { OWNER, RESUME_URL } from './data/portfolio'
 import { useAuth } from './lib/AuthContext'
@@ -69,10 +73,24 @@ import {
 } from './lib/sandbox'
 import { loadSandbox, saveSandbox } from './lib/sandboxStore'
 
-const CAMERA_DEBUG_URL = new URLSearchParams(
-  typeof window === 'undefined' ? '' : window.location.search,
-).has('camera')
+function routeFromPath(pathname) {
+  const play = parsePlayRoute(pathname)
+  if (play.kind === 'play') return play
+  const blog = parseBlogRoute(pathname)
+  if (blog.kind === 'write' || blog.kind === 'blog') return blog
+  const focus = parseFocusRoute(pathname)
+  if (focus?.kind === 'focus') return focus
+  return { kind: 'home' }
+}
 
+/** First-load block arrival — skip deep links and reduced-motion. */
+function shouldPlayBoardIntro(pathname) {
+  if (typeof window === 'undefined') return false
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false
+  const route = routeFromPath(pathname || window.location.pathname)
+  if (route.kind !== 'home') return false
+  return true
+}
 function useViewport() {
   const [size, setSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
@@ -89,16 +107,28 @@ function useViewport() {
 }
 
 export default function App() {
+  const router = useRouter()
+  const pathname = usePathname() || '/'
+  const searchParams = useSearchParams()
+  const cameraDebugFromUrl = searchParams?.has('camera') ?? false
   const { width: vw, height: vh } = useViewport()
   const reduceMotion = useReducedMotion()
 
-  const [selectedId, setSelectedId] = useState(null)
-  const [phase, setPhase] = useState('board') // board | zooming | detail | exiting | returning
-  const [hoveredId, setHoveredId] = useState(null)
-  const [blogSlug, setBlogSlug] = useState(null)
-  const [deskOpen, setDeskOpen] = useState(
-    () => (typeof window === 'undefined' ? false : parseBlogRoute().kind === 'write'),
+  const bootRoute = routeFromPath(pathname)
+
+  const [selectedId, setSelectedId] = useState(() => {
+    if (bootRoute.kind === 'blog') return 'blog'
+    if (bootRoute.kind === 'focus') return bootRoute.id
+    return null
+  })
+  const [phase, setPhase] = useState(() =>
+    bootRoute.kind === 'blog' || bootRoute.kind === 'focus' ? 'detail' : 'board',
   )
+  const [hoveredId, setHoveredId] = useState(null)
+  const [blogSlug, setBlogSlug] = useState(() =>
+    bootRoute.kind === 'blog' ? bootRoute.slug : null,
+  )
+  const [deskOpen, setDeskOpen] = useState(() => bootRoute.kind === 'write')
   const [deskView, setDeskView] = useState('home')
   const [livePosts, setLivePosts] = useState([])
   const [livePages, setLivePages] = useState({})
@@ -111,9 +141,7 @@ export default function App() {
   const [sandboxSelectedId, setSandboxSelectedId] = useState(null)
   const [sandboxViewOnly, setSandboxViewOnly] = useState(false)
   const [sandboxExpired, setSandboxExpired] = useState(false)
-  const [sandboxLoading, setSandboxLoading] = useState(
-    () => (typeof window === 'undefined' ? false : parsePlayRoute().kind === 'play'),
-  )
+  const [sandboxLoading, setSandboxLoading] = useState(() => bootRoute.kind === 'play')
   const [sandboxShareBusy, setSandboxShareBusy] = useState(false)
   const [sandboxShareMessage, setSandboxShareMessage] = useState('')
   const [sandboxShareError, setSandboxShareError] = useState('')
@@ -127,7 +155,7 @@ export default function App() {
   const scene = sandboxOpen || sandboxLoading ? playScene : portfolioScene
   const suppressHomeBoard = sandboxLoading || sandboxOpen || sandboxExpired
 
-  const [cameraDebugOpen, setCameraDebugOpen] = useState(CAMERA_DEBUG_URL)
+  const [cameraDebugOpen, setCameraDebugOpen] = useState(cameraDebugFromUrl)
   const [cameraDebugPanelVisible, setCameraDebugPanelVisible] = useState(true)
   const [cameraDebug, setCameraDebug] = useState(() =>
     createCameraDebugDefaults({
@@ -170,19 +198,59 @@ export default function App() {
       ? PERSPECTIVE_ORIGIN_MOBILE
       : 'center center'
 
-  const [floatReady, setFloatReady] = useState(true)
-  const [gridReady, setGridReady] = useState(true)
+  const [floatReady, setFloatReady] = useState(() => !shouldPlayBoardIntro(pathname))
+  const [gridReady, setGridReady] = useState(() => !shouldPlayBoardIntro(pathname))
+  const [chromeReady, setChromeReady] = useState(() => !shouldPlayBoardIntro(pathname))
+  const [entering, setEntering] = useState(() => shouldPlayBoardIntro(pathname))
   const frozenAccentRef = useRef(null)
   const ignorePanelBackUntil = useRef(0)
   const sandboxScatterTimers = useRef([])
   const playLoadGen = useRef(0)
+  const appliedPathRef = useRef(null)
+  /** Defer Next.js navigations until camera/panel phases finish. */
+  const pendingUrlRef = useRef(null)
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
+  const selectedIdRef = useRef(selectedId)
+  selectedIdRef.current = selectedId
+  const sandboxOpenRef = useRef(sandboxOpen)
+  sandboxOpenRef.current = sandboxOpen
+  const sandboxLoadingRef = useRef(sandboxLoading)
+  sandboxLoadingRef.current = sandboxLoading
+
+  const commitUrl = useCallback(
+    (path, { replace = false } = {}) => {
+      pendingUrlRef.current = null
+      appliedPathRef.current = path
+      if (replace) router.replace(path)
+      else router.push(path)
+    },
+    [router],
+  )
+
+  const queueUrl = useCallback(
+    (path, { replace = false, afterPhase } = {}) => {
+      if (!afterPhase || phaseRef.current === afterPhase) {
+        commitUrl(path, { replace })
+        return
+      }
+      pendingUrlRef.current = { path, replace, afterPhase }
+    },
+    [commitUrl],
+  )
+
+  useEffect(() => {
+    const pending = pendingUrlRef.current
+    if (!pending || phase !== pending.afterPhase) return
+    commitUrl(pending.path, { replace: pending.replace })
+  }, [phase, commitUrl])
 
   const focus = useMemo(() => getFocusTarget(selectedId, scene), [selectedId, scene])
   const sandboxPieceFocus = useMemo(
     () => (sandboxOpen ? getFocusTarget(sandboxSelectedId, playScene) : null),
     [sandboxOpen, sandboxSelectedId, playScene],
   )
-  const blogItems = useMemo(() => mergeBlogPosts([], livePosts), [livePosts])
+  const blogItems = useMemo(() => mergeBlogPosts(BLOG_SEED, livePosts), [livePosts])
   const focusedPiece = useMemo(() => {
     if (focus?.kind !== 'piece') return focus
     const live = applyLivePage(focus, livePages)
@@ -311,22 +379,22 @@ export default function App() {
   const boardTransform = useMotionTemplate`translate3d(${camX}px, ${camY}px, 0) scale(${camScale}) rotateX(${sceneTilt}deg) rotateZ(${sceneSpin}deg)`
 
   const select = useCallback((id) => {
-    if (sandboxOpen) return
+    if (sandboxOpen || entering) return
     setDeskOpen(false)
     setSelectedId(id)
     setPhase('zooming')
     setHoveredId(null)
     if (id === 'blog') {
       setBlogSlug(null)
-      writeBlogUrl(null)
+      queueUrl('/blog', { afterPhase: 'detail' })
     } else {
       setBlogSlug(null)
-      writeBlogUrl(undefined)
+      queueUrl(focusPath(id), { afterPhase: 'detail' })
     }
-  }, [sandboxOpen])
+  }, [sandboxOpen, entering, queueUrl])
 
   const enterSandbox = useCallback(() => {
-    if (compact || phase !== 'board') return
+    if (compact || phase !== 'board' || entering) return
     setSelectedId(null)
     setHoveredId(null)
     setSandboxState(createSandboxState())
@@ -339,7 +407,7 @@ export default function App() {
     setSandboxShareMessage('')
     setSandboxShareError('')
     setSandboxOpen(true)
-  }, [compact, phase])
+  }, [compact, phase, entering])
 
   const exitSandbox = useCallback(() => {
     playLoadGen.current += 1
@@ -357,8 +425,10 @@ export default function App() {
     setSandboxShareError('')
     setSandboxLoading(false)
     setHoveredId(null)
-    if (parsePlayRoute().kind === 'play') writePlayUrl(undefined, { replace: true })
-  }, [])
+    if (parsePlayRoute(pathname).kind === 'play') {
+      commitUrl('/', { replace: true })
+    }
+  }, [pathname, commitUrl])
 
   const closeSandboxPiece = useCallback(() => {
     if (sandboxPhase === 'detail' || sandboxPhase === 'zooming') {
@@ -392,7 +462,9 @@ export default function App() {
     setSandboxShareMessage('')
     setSandboxShareError('')
     setSandboxLoading(true)
-    writePlayUrl(id, { replace })
+    pendingUrlRef.current = null
+    writePlayUrl(id, { replace, router })
+    appliedPathRef.current = playPath(id)
 
     try {
       const result = await loadSandbox(id)
@@ -425,13 +497,13 @@ export default function App() {
         })
       })
     }
-  }, [])
+  }, [router])
 
   const dismissSandboxExpired = useCallback(() => {
     setSandboxExpired(false)
     setSandboxLoading(false)
-    writePlayUrl(undefined, { replace: true })
-  }, [])
+    commitUrl('/', { replace: true })
+  }, [commitUrl])
 
   const shareSandboxBoard = useCallback(async () => {
     if (sandboxViewOnly || sandboxShareBusy || sandboxPhase !== 'board') return
@@ -516,46 +588,52 @@ export default function App() {
     if (Date.now() < ignorePanelBackUntil.current) return
     if (phase === 'detail') {
       setBlogSlug(null)
-      writeBlogUrl(undefined)
       setPhase('exiting')
+      // Wait until the camera has returned to the board before swapping the route.
+      queueUrl('/', { replace: true, afterPhase: 'board' })
     }
-  }, [phase])
+  }, [phase, queueUrl])
 
   const openBlogArticle = useCallback((slug) => {
     setBlogSlug(slug)
-    writeBlogUrl(slug, { replace: slug == null })
-  }, [])
+    commitUrl(slug == null ? '/blog' : `/blog/${slug}`, { replace: slug == null })
+  }, [commitUrl])
 
   const openDesk = useCallback((view = 'home') => {
     setDeskView(view)
     setDeskOpen(true)
-    writeDeskUrl()
-  }, [])
+    commitUrl('/write')
+  }, [commitUrl])
 
   const closeDesk = useCallback(() => {
     ignorePanelBackUntil.current = Date.now() + 400
     setDeskOpen(false)
     setDeskView('home')
-    const replace = parseBlogRoute().kind === 'write'
-    if (selectedId === 'blog') writeBlogUrl(blogSlug, { replace })
-    else writeBlogUrl(undefined, { replace })
-  }, [selectedId, blogSlug])
+    const replace = parseBlogRoute(pathname).kind === 'write'
+    if (selectedId === 'blog') {
+      commitUrl(blogSlug ? `/blog/${blogSlug}` : '/blog', { replace })
+    } else if (selectedId) {
+      commitUrl(focusPath(selectedId), { replace })
+    } else {
+      commitUrl('/', { replace })
+    }
+  }, [selectedId, blogSlug, pathname, commitUrl])
 
   const closeDeskToBoard = useCallback(() => {
     setDeskOpen(false)
     setDeskView('home')
     setBlogSlug(null)
-    writeBlogUrl(undefined, { replace: true })
     setPhase((current) => (current === 'detail' || current === 'zooming' ? 'exiting' : current))
-  }, [])
+    queueUrl('/', { replace: true, afterPhase: 'board' })
+  }, [queueUrl])
 
   const onPublished = useCallback((slug) => {
     setDeskOpen(false)
     setSelectedId('blog')
     setBlogSlug(slug)
     setPhase('detail')
-    writeBlogUrl(slug)
-  }, [])
+    commitUrl(`/blog/${slug}`)
+  }, [commitUrl])
 
   const onDeletePost = useCallback(async (item) => {
     const slug = item?.slug
@@ -585,72 +663,73 @@ export default function App() {
     }
   }, [isOwner])
 
-  // Deep link: /play/{id}, /blog, /blog/{slug}, /write
+  // Deep link / browser navigation: sync board state from the URL.
+  // Only pathname should trigger this — selectedId/sandbox deps caused a race on
+  // back-to-home (clear selection → re-apply still-active /about → double scatter).
   useEffect(() => {
-    const play = parsePlayRoute()
-    if (play.kind === 'play') {
-      openSharedSandbox(play.id, { replace: true })
+    if (appliedPathRef.current === pathname) return
+    appliedPathRef.current = pathname
+    // Browser back/forward or external link — cancel any deferred push.
+    pendingUrlRef.current = null
+
+    const route = routeFromPath(pathname)
+
+    if (route.kind === 'play') {
+      openSharedSandbox(route.id, { replace: true })
       return
     }
-    const route = parseBlogRoute()
+
+    if (sandboxOpenRef.current || sandboxLoadingRef.current) {
+      playLoadGen.current += 1
+      sandboxScatterTimers.current.forEach(clearTimeout)
+      sandboxScatterTimers.current = []
+      setSandboxOpen(false)
+      setSandboxState(resetSandbox())
+      setSandboxTool('stamp')
+      setSandboxPhase('board')
+      setSandboxFocus(null)
+      setSandboxSelectedId(null)
+      setSandboxViewOnly(false)
+      setSandboxShareMessage('')
+      setSandboxShareError('')
+      setSandboxLoading(false)
+      setHoveredId(null)
+    }
+    setSandboxExpired(false)
+
     if (route.kind === 'write') {
       setDeskOpen(true)
       return
     }
-    if (route.kind !== 'blog') return
-    setSelectedId('blog')
-    setBlogSlug(route.slug)
-    setPhase('detail')
-    writeBlogUrl(route.slug, { replace: true })
-  }, [openSharedSandbox])
 
-  useEffect(() => {
-    const onPopState = () => {
-      const play = parsePlayRoute()
-      if (play.kind === 'play') {
-        openSharedSandbox(play.id, { replace: true })
-        return
-      }
-      if (sandboxOpen || sandboxLoading) {
-        playLoadGen.current += 1
-        sandboxScatterTimers.current.forEach(clearTimeout)
-        sandboxScatterTimers.current = []
-        setSandboxOpen(false)
-        setSandboxState(resetSandbox())
-        setSandboxTool('stamp')
-        setSandboxPhase('board')
-        setSandboxFocus(null)
-        setSandboxSelectedId(null)
-        setSandboxViewOnly(false)
-        setSandboxShareMessage('')
-        setSandboxShareError('')
-        setSandboxLoading(false)
-        setHoveredId(null)
-      }
-      setSandboxExpired(false)
+    setDeskOpen(false)
 
-      const route = parseBlogRoute()
-      if (route.kind === 'write') {
-        setDeskOpen(true)
-        return
-      }
-      setDeskOpen(false)
-      if (route.kind === 'blog') {
+    if (route.kind === 'blog') {
+      setBlogSlug(route.slug)
+      if (selectedIdRef.current !== 'blog') {
         setSelectedId('blog')
-        setBlogSlug(route.slug)
         setHoveredId(null)
         setPhase('detail')
-        return
       }
-      setBlogSlug(null)
-      setPhase((current) => {
-        if (current === 'detail' || current === 'zooming') return 'exiting'
-        return current
-      })
+      return
     }
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [openSharedSandbox, sandboxOpen, sandboxLoading])
+
+    if (route.kind === 'focus') {
+      if (selectedIdRef.current !== route.id) {
+        setSelectedId(route.id)
+        setBlogSlug(null)
+        setHoveredId(null)
+        setPhase('detail')
+      }
+      return
+    }
+
+    setBlogSlug(null)
+    setPhase((current) => {
+      if (current === 'detail' || current === 'zooming') return 'exiting'
+      return current
+    })
+  }, [pathname, openSharedSandbox])
 
   useEffect(() => {
     if (compact && sandboxOpen && !sandboxViewOnly) exitSandbox()
@@ -662,13 +741,37 @@ export default function App() {
       setGridReady(false)
       return
     }
+    if (entering) return
     const gridT = setTimeout(() => setGridReady(true), 200)
     const floatT = setTimeout(() => setFloatReady(true), 360)
     return () => {
       clearTimeout(gridT)
       clearTimeout(floatT)
     }
-  }, [phase])
+  }, [phase, entering])
+
+  useEffect(() => {
+    if (!entering) return
+    if (reduceMotion) {
+      setEntering(false)
+      setGridReady(true)
+      setChromeReady(true)
+      setFloatReady(true)
+      return
+    }
+    const hold = arrivalHoldMs(false)
+    const gridT = setTimeout(() => setGridReady(true), 520)
+    // Stamp + sandbox ease in while late blocks are still landing.
+    const chromeT = setTimeout(() => setChromeReady(true), 980)
+    const doneT = setTimeout(() => setEntering(false), hold)
+    const floatT = setTimeout(() => setFloatReady(true), hold + 140)
+    return () => {
+      clearTimeout(gridT)
+      clearTimeout(chromeT)
+      clearTimeout(doneT)
+      clearTimeout(floatT)
+    }
+  }, [entering, reduceMotion])
 
   useEffect(() => {
     if (phase !== 'exiting') return
@@ -918,6 +1021,7 @@ export default function App() {
                   onSelect={select}
                   onHover={setHoveredId}
                   allowFloat={floatReady}
+                  entering={entering}
                   reduceMotion={reduceMotion}
                 />
               ))}
@@ -944,14 +1048,14 @@ export default function App() {
                 />
               ))}
               <BoardCredit
-                visible={onBoard || phase === 'returning'}
+                visible={(onBoard || phase === 'returning') && chromeReady}
                 layout={scene}
                 compact={compact}
                 owner={owner}
               />
               <SandboxEntry
                 entry={portfolioScene.sandboxEntry}
-                visible={onBoard && !compact && !deskOpen}
+                visible={onBoard && !compact && !deskOpen && chromeReady}
                 onEnter={enterSandbox}
               />
             </>

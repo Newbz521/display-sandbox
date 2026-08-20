@@ -12,8 +12,7 @@
 }
 
 html,
-body,
-#root {
+body {
   height: 100%;
 }
 
@@ -34,6 +33,24 @@ body {
   text-size-adjust: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Crawlable SSR copy — in the document for bots, clipped for sighted UI. */
+.seo-content {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  white-space: normal;
+}
+
+.portfolio-app {
+  position: absolute;
+  inset: 0;
 }
 
 /* Comfortable reading size on phones — scales rem-based Tailwind utilities too. */

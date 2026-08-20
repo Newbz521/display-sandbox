@@ -2,28 +2,28 @@
   "name": "home-design",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview --port 4173",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Lawrence Yee portfolio — Next.js SSR with SEO and JSON-LD",
   "dependencies": {
     "firebase": "^12.17.1",
     "framer-motion": "^13.0.0",
+    "next": "^16.3.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@tailwindcss/postcss": "^4.3.3",
+    "postcss": "^8.5.26",
     "prettier": "^3.9.6",
-    "tailwindcss": "^4.3.3",
-    "vite": "^8.2.1"
+    "tailwindcss": "^4.3.3"
   },
   "private": true,
   "type": "module"

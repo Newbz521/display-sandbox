@@ -1,4 +1,13 @@
-import { collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore'
 import { firestoreWriteError, getFirebase } from './firebase'
 import { postSlug, slugify } from './blogRoutes'
 
@@ -51,6 +60,32 @@ export function subscribePosts(onChange, onError) {
     },
     (err) => onError?.(err),
   )
+}
+
+/** One-shot fetch for SSR / metadata. Falls back to [] if Firebase is offline. */
+export async function fetchPosts() {
+  const { db } = getFirebase()
+  if (!db) return []
+  try {
+    const snap = await getDocs(collection(db, 'posts'))
+    return snap.docs.map((d) => toPublicPost({ ...d.data(), source: 'live' }, d.id))
+  } catch {
+    return []
+  }
+}
+
+export async function fetchPostBySlug(slug) {
+  const nextSlug = slugify(slug)
+  if (!nextSlug) return null
+  const { db } = getFirebase()
+  if (!db) return null
+  try {
+    const snap = await getDoc(doc(db, 'posts', nextSlug))
+    if (!snap.exists()) return null
+    return toPublicPost({ ...snap.data(), source: 'live' }, snap.id)
+  } catch {
+    return null
+  }
 }
 
 export async function publishPost({ title, blurb, slug, date }) {

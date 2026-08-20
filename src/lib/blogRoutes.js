@@ -2,10 +2,7 @@
  * Path-based blog deep links:
  *   /blog              → open Blog piece (post list)
  *   /blog/{slug}       → open Blog piece + that article
- *
- * Also accepts hash forms for hosts without SPA rewrites:
- *   /#/blog            → list
- *   /#/blog/{slug}     → article
+ *   /write             → write desk
  */
 
 export function slugify(title) {
@@ -28,28 +25,37 @@ export function findPostBySlug(items, slug) {
 }
 
 /** @returns {{ kind: 'home' } | { kind: 'write' } | { kind: 'blog', slug: string | null }} */
-export function parseBlogRoute(location = typeof window === 'undefined' ? null : window.location) {
-  if (!location) return { kind: 'home' }
+export function parseBlogRoute(locationOrPath) {
+  let path = '/'
+  if (typeof locationOrPath === 'string') {
+    path = locationOrPath
+  } else if (locationOrPath?.pathname) {
+    path = locationOrPath.pathname
+  } else if (typeof window !== 'undefined') {
+    path = window.location.pathname
+  } else {
+    return { kind: 'home' }
+  }
 
-  const path = (location.pathname || '/').replace(/\/+$/, '') || '/'
-  const hash = (location.hash || '').replace(/^#/, '')
+  path = (path || '/').replace(/\/+$/, '') || '/'
 
   if (path === '/write') return { kind: 'write' }
 
-  // /blog or /blog/slug
   if (path === '/blog' || path.startsWith('/blog/')) {
     const rest = path === '/blog' ? '' : path.slice('/blog/'.length)
     const slug = rest.split('/').filter(Boolean)[0] || null
     return { kind: 'blog', slug }
   }
 
-  // /#/blog or /#/blog/slug  (and bare #blog / #blog/slug)
-  const hashPath = hash.startsWith('/') ? hash.slice(1) : hash
-  if (hashPath === 'write') return { kind: 'write' }
-  if (hashPath === 'blog' || hashPath.startsWith('blog/')) {
-    const rest = hashPath === 'blog' ? '' : hashPath.slice('blog/'.length)
-    const slug = rest.split('/').filter(Boolean)[0] || null
-    return { kind: 'blog', slug }
+  if (typeof locationOrPath !== 'string' && locationOrPath?.hash) {
+    const hash = (locationOrPath.hash || '').replace(/^#/, '')
+    const hashPath = hash.startsWith('/') ? hash.slice(1) : hash
+    if (hashPath === 'write') return { kind: 'write' }
+    if (hashPath === 'blog' || hashPath.startsWith('blog/')) {
+      const rest = hashPath === 'blog' ? '' : hashPath.slice('blog/'.length)
+      const slug = rest.split('/').filter(Boolean)[0] || null
+      return { kind: 'blog', slug }
+    }
   }
 
   return { kind: 'home' }
@@ -67,20 +73,24 @@ export function blogArticlePath(slug) {
   return slug ? `/blog/${slug}` : '/blog'
 }
 
-export function writeBlogUrl(slug, { replace = false } = {}) {
+function navigate(path, { replace = false, router } = {}) {
+  if (router) {
+    if (replace) router.replace(path)
+    else router.push(path)
+    return
+  }
   if (typeof window === 'undefined') return
-  const next = slug === undefined ? '/' : blogArticlePath(slug)
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-  if (current === next || (next === '/' && (current === '/' || current === ''))) return
+  if (current === path || (path === '/' && (current === '/' || current === ''))) return
   const method = replace ? 'replaceState' : 'pushState'
-  window.history[method](null, '', next)
+  window.history[method](null, '', path)
 }
 
-export function writeDeskUrl({ replace = false } = {}) {
-  if (typeof window === 'undefined') return
-  const next = writeDeskPath()
-  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-  if (current === next) return
-  const method = replace ? 'replaceState' : 'pushState'
-  window.history[method](null, '', next)
+export function writeBlogUrl(slug, opts = {}) {
+  const next = slug === undefined ? '/' : blogArticlePath(slug)
+  navigate(next, opts)
+}
+
+export function writeDeskUrl(opts = {}) {
+  navigate(writeDeskPath(), opts)
 }

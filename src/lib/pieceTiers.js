@@ -68,6 +68,31 @@ export function scatterTransition(returning, dist, reduceMotion) {
   }
 }
 
+/**
+ * First-load arrival for a single block. Same tween approach as scatter — dozens
+ * of springs at once would fight the main thread.
+ */
+export function arrivalTransition(delay, reduceMotion) {
+  if (reduceMotion) return { type: 'tween', duration: 0.01 }
+  return {
+    type: 'tween',
+    duration: 0.78,
+    ease: [0.16, 1, 0.3, 1],
+    delay,
+  }
+}
+
+/** Stagger wave from board centre, then letter order within a piece. */
+export function arrivalDelay(piece, blockIndex, reduceMotion) {
+  if (reduceMotion) return 0
+  return 0.05 + piece.dist / 2600 + piece.index * 0.03 + blockIndex * 0.036
+}
+
+/** How long App should keep interaction locked while blocks land. */
+export function arrivalHoldMs(reduceMotion) {
+  return reduceMotion ? 0 : 1600
+}
+
 export function cameraSpring(phase, reduceMotion) {
   if (reduceMotion) return CAMERA_SPRINGS.reduced
   switch (phase) {
